@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+
+class AddActiveFieldToRecipes extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        Schema::table('recipes', function (Blueprint $table) {
+            $table->tinyInteger('active')->nullable();
+        });
+
+        // Update all current recipes to be active
+        DB::table('recipes')->update(['active' => 1]);
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        Schema::table('recipes', function (Blueprint $table) {
+           $table->dropColumn('active');
+        });
+    }
+}
