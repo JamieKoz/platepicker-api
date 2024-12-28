@@ -8,6 +8,13 @@ use App\Services\RecipeService;
 
 class RecipeController extends Controller
 {
+  protected $recipeService;
+
+    public function __construct(RecipeService $recipeService)
+    {
+        $this->recipeService = $recipeService;
+    }
+
     public function getRecipe()
     {
         $recipeService = new RecipeService();
@@ -19,14 +26,15 @@ class RecipeController extends Controller
         ]);
     }
 
-    public function getList()
+    public function getList(): JsonResponse
     {
-        $recipeService = new RecipeService();
-        $list = $recipeService->getRecipeList();
-        return response()->json($list, 200, [
-            'Access-Control-Allow-Origin' => '*',
-            'Access-Control-Allow-Headers' => 'Origin, Content-Type, X-Auth-Token'
-        ]);
+        try {
+            $list = $this->recipeService->getRecipeList();
+            return response()->json($list);
+        } catch (\Exception $e) {
+            /* \Log::error('Recipe list error: ' . $e->getMessage()); */
+            return response()->json(['error' => 'Failed to fetch recipes'], 500);
+        }
     }
 
     public function toggleStatus($mealId){
