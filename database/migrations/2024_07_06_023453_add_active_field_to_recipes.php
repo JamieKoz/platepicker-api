@@ -19,7 +19,7 @@ class AddActiveFieldToRecipes extends Migration
         });
 
         // Update all current recipes to be active
-        DB::table('recipes')->update(['active' => 1]);
+        DB::table('recipes')->update(['active' => 0]);
     }
 
     /**

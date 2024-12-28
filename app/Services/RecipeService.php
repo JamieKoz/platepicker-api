@@ -28,9 +28,16 @@ class RecipeService
         return $recipe;
     }
 
-    public function getRandomRecipesInactive($count = 27)
+    public function getRecipeByNameInactive(string $name)
     {
-        $recipes = Recipe::inRandomOrder()->where('active', 0)->take($count)->get();
+        $recipe = Recipe::query()->where('title', $name)->where('active', 1)->get();
+
+        return $recipe;
+    }
+
+    public function getRandomRecipesActive($count = 27)
+    {
+        $recipes = Recipe::inRandomOrder()->where('active', 1)->take($count)->get();
         foreach ($recipes as $recipe) {
             $imagePath = 'food-images/food-images/public/' . $recipe->image_name;
             $recipe->image_content = null; // Handle the case where the image does not exist
@@ -38,18 +45,6 @@ class RecipeService
                 $recipe->image_content = Storage::get($imagePath);
             }
         }
-        return $recipes;
-    }
-
-    public function getRecipeByNameInactive(string $name)
-    {
-        $recipe = Recipe::query()->where('title', $name)->where('active', 0)->get();
-
-        return $recipe;
-    }
-
-    public function getRecipesByJamiePreference(){
-        $recipes = Recipe::inRandomOrder()->where('active', 1)->where('title', 'Wiener Schnitzel')->take(25)->get();
         return $recipes;
     }
 
@@ -68,7 +63,7 @@ class RecipeService
 
     public function search($searchTerm){
 
-        return Recipe::orderBy('title', 'ASC')->where('title', 'LIKE', '%' . $searchTerm . '%')->get();
+        return Recipe::orderBy('title', 'ASC')->where('title', 'LIKE', '%' . $searchTerm . '%')->paginate(10);
     }
 
 }
