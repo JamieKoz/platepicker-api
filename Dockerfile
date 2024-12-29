@@ -1,4 +1,3 @@
-# Dockerfile
 FROM php:8.1-apache
 
 # Enable required Apache modules
@@ -19,7 +18,7 @@ RUN mkdir -p /var/log/apache2 \
     && touch /var/log/apache2/error.log /var/log/apache2/access.log \
     && chown -R www-data:www-data /var/log/apache2
 
-# Update Apache configuration to use files instead of syslog
+# Update Apache configuration
 RUN sed -i 's#ErrorLog .*#ErrorLog /var/log/apache2/error.log#' /etc/apache2/apache2.conf \
     && sed -i 's#CustomLog .*#CustomLog /var/log/apache2/access.log combined#' /etc/apache2/apache2.conf
 
@@ -42,19 +41,22 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . .
 
+# Create necessary directories and set permissions before composer install
+RUN mkdir -p bootstrap/cache storage/app/public \
+    && chown -R www-data:www-data bootstrap/cache storage \
+    && chmod -R 775 bootstrap/cache storage
+
 # Set up environment file
 COPY .env.production .env
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Set permissions and create storage link
-RUN mkdir -p /var/www/html/storage/app/public \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/log/apache2 /var/www/html/public \
+# Final permission setup and storage link
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/log/apache2 /var/www/html/public \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/log/apache2 /var/www/html/public \
     && rm -f /var/www/html/public/storage \
-    && cd /var/www/html && php artisan storage:link \
-    && chmod -R 775 storage bootstrap/cache
+    && cd /var/www/html && php artisan storage:link
 
 # Expose port 80 for Apache
 EXPOSE 80
