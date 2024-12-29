@@ -4,23 +4,10 @@ namespace App\Services;
 
 use App\Models\Recipe;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class RecipeService
 {
-    public function getRandomRecipes($count = 1)
-    {
-        $recipes = Recipe::inRandomOrder()->take($count)->get();
-        foreach ($recipes as $recipe) {
-            $imagePath = 'food-images/food-images/public/' . $recipe->image_name;
-            if (Storage::exists($imagePath)) {
-                $recipe->image_content = Storage::get($imagePath);
-            } else {
-                $recipe->image_content = null; // Handle the case where the image does not exist
-            }
-        }
-        return $recipes;
-    }
-
     public function getRecipeByName(string $name)
     {
         $recipe = Recipe::query()->where('title', $name)->get();
@@ -39,11 +26,7 @@ class RecipeService
     {
         $recipes = Recipe::inRandomOrder()->where('active', 1)->take($count)->get();
         foreach ($recipes as $recipe) {
-            $imagePath = 'food-images/food-images/public/' . $recipe->image_name;
-            $recipe->image_content = null; // Handle the case where the image does not exist
-            if (Storage::exists($imagePath)) {
-                $recipe->image_content = Storage::get($imagePath);
-            }
+            $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
         }
         return $recipes;
     }
@@ -64,6 +47,35 @@ class RecipeService
     public function search($searchTerm){
 
         return Recipe::orderBy('title', 'ASC')->where('title', 'LIKE', '%' . $searchTerm . '%')->paginate(10);
+    }
+
+        public function uploadImageToS3($file, $filename)
+    {
+        try {
+            $path = Storage::disk('s3')->put(
+                config('cloudfront.bucket_path'),
+                $file,
+                $filename,
+                'private' // Changed to private since we're using CloudFront
+            );
+
+            return $this->getImageUrl($filename);
+        } catch (\Exception $e) {
+            Log::error('S3 upload failed: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    private function getImageUrl($filename)
+    {
+        if (empty($filename)) {
+            return null;
+        }
+
+        $cloudFrontUrl = rtrim(config('cloudfront.url'), '/');
+        $bucketPath = trim(config('cloudfront.bucket_path'), '/');
+
+        return "{$cloudFrontUrl}/{$bucketPath}/{$filename}";
     }
 
 }
