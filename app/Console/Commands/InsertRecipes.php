@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class InsertRecipes extends Command
 {
@@ -39,14 +38,16 @@ class InsertRecipes extends Command
      */
     public function handle()
     {
+        $filePath = storage_path('app/data.json');
+
         // Check if the file exists
-        if (!Storage::exists('data.json')) {
-            $this->error('JSON file not found.');
+        if (!file_exists($filePath)) {
+            $this->error('JSON file not found at: ' . $filePath);
             return;
         }
 
         // Read the JSON file
-        $json = Storage::get('data.json');
+        $json = file_get_contents($filePath);
         if ($json === false) {
             $this->error('Failed to read JSON file.');
             return;
@@ -79,4 +80,3 @@ class InsertRecipes extends Command
         $this->info('Recipes inserted successfully!');
     }
 }
-

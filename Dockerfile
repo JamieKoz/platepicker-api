@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     curl \
+	vim \
     rsyslog \
     && docker-php-ext-install pdo pdo_sqlite \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -18,6 +19,14 @@ RUN mkdir -p /var/log/apache2 \
     && touch /var/log/apache2/error.log /var/log/apache2/access.log \
     && chown -R www-data:www-data /var/log/apache2
 
+# Create necessary directories and set permissions
+RUN mkdir -p storage/logs \
+    && mkdir -p storage/framework/{cache,sessions,views} \
+    && mkdir -p storage/app/public \
+    && touch storage/logs/laravel.log \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache \
+    && chmod 664 storage/logs/laravel.log
 # Update Apache configuration
 RUN sed -i 's#ErrorLog .*#ErrorLog /var/log/apache2/error.log#' /etc/apache2/apache2.conf \
     && sed -i 's#CustomLog .*#CustomLog /var/log/apache2/access.log combined#' /etc/apache2/apache2.conf

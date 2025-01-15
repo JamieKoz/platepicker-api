@@ -13,5 +13,5 @@ services:
       - DB_DATABASE=/var/www/html/database/database.sqlite
     volumes:
       - ./storage:/var/www/html/storage
-      - ./database/database.sqlite:/var/www/html/database/database.sqlite
+      - ./database:/var/www/html/database
       - ./storage/logs:/var/log/apache2
