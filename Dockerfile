@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     curl \
+    vim \
     rsyslog \
     && docker-php-ext-install pdo pdo_sqlite \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -44,22 +45,23 @@ COPY . .
 # Set up environment file
 COPY .env.production .env
 
-# Create necessary directories and set initial permissions
-RUN mkdir -p /var/www/html/storage/logs \
-    && mkdir -p /var/www/html/storage/framework/{cache,sessions,views} \
-    && mkdir -p /var/www/html/storage/app/public \
-    && touch /var/www/html/storage/logs/laravel.log \
-    && chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod 664 /var/www/html/storage/logs/laravel.log
+# Create all necessary directories and set initial permissions
+RUN mkdir -p bootstrap/cache \
+    && mkdir -p storage/logs \
+    && mkdir -p storage/framework/{cache,sessions,views} \
+    && mkdir -p storage/app/public \
+    && touch storage/logs/laravel.log \
+    && chown -R www-data:www-data . \
+    && chmod -R 775 storage bootstrap/cache \
+    && chmod 664 storage/logs/laravel.log
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
 # Final permission setup and storage link
 RUN php artisan storage:link \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
 # Expose port 80 for Apache
 EXPOSE 80
