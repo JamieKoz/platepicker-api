@@ -17,17 +17,9 @@ use Fruitcake\Cors\HandleCors;
 */
 
 Route::get('/', function () {
-    // http::get('https://www.themealdb.com/api/json/v1/1/random.php');
     return view('welcome');
 });
 
 Route::get('/csrf-token', function () {
     return response()->json(['token' => csrf_token()]);
 });
-// Route::get('/meal', [MealController::class, 'showMeal'])->name('meal');
-// Route::post('/choose-meal', [MealController::class, 'chooseMeal'])->name('choose-meal');
-
-/* Route::get('/recipe', [RecipeController::class, 'getRecipe'])->name(''); */
-/* Route::get('/list', [RecipeController::class, 'getList'])->name(''); */
-/* Route::post('/meal/{mealId}/toggle-status', [RecipeController::class, 'toggleStatus']); */
-/* Route::get('/search', [RecipeController::class, 'search']); */

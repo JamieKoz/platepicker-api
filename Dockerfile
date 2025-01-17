@@ -53,7 +53,9 @@ RUN mkdir -p bootstrap/cache \
     && touch storage/logs/laravel.log \
     && chown -R www-data:www-data . \
     && chmod -R 775 storage bootstrap/cache \
-    && chmod 664 storage/logs/laravel.log
+    && chmod 664 storage/logs/laravel.log \
+    && chmod 775 database \             # Add these two lines
+    && chmod 664 database/database.sqlite  # for database permissions
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader

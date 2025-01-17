@@ -17,8 +17,7 @@ class RecipeController extends Controller
 
     public function getRecipe()
     {
-        $recipeService = new RecipeService();
-        $recipes = $recipeService->getRandomRecipesActive(27);
+        $recipes = $this->recipeService->getRandomRecipesActive(27);
 
         return response()->json($recipes, 200, [
             'Access-Control-Allow-Origin' => '*',
@@ -38,8 +37,7 @@ class RecipeController extends Controller
     }
 
     public function toggleStatus($mealId){
-        $recipeService = new RecipeService();
-        $recipe = $recipeService->toggleStatus($mealId);
+        $recipe = $this->recipeService->toggleStatus($mealId);
         return response()->json($recipe, 200, [
             'Access-Control-Allow-Origin' => '*',
             'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS, PUT, DELETE',
@@ -50,10 +48,8 @@ class RecipeController extends Controller
     public function search(Request $request)
     {
         $searchTerm = $request->query('q');
-        $recipeService = new RecipeService();
 
-        // Modify RecipeService search method to return paginated results
-        $recipes = $recipeService->search($searchTerm);
+        $recipes = $this->recipeService->search($searchTerm);
 
         return response()->json($recipes);
     }

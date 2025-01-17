@@ -3,26 +3,12 @@
 namespace App\Services;
 
 use App\Models\Recipe;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 class RecipeService
 {
-    public function getRecipeByName(string $name)
-    {
-        $recipe = Recipe::query()->where('title', $name)->get();
-
-        return $recipe;
-    }
-
-    public function getRecipeByNameInactive(string $name)
-    {
-        $recipe = Recipe::query()->where('title', $name)->where('active', 1)->get();
-
-        return $recipe;
-    }
-
-    public function getRandomRecipesActive($count = 27)
+    public function getRandomRecipesActive($count = 27): Collection
     {
         $recipes = Recipe::inRandomOrder()->where('active', 1)->take($count)->get();
         foreach ($recipes as $recipe) {
@@ -31,12 +17,12 @@ class RecipeService
         return $recipes;
     }
 
-    public function getRecipeList()
+    public function getRecipeList(): LengthAwarePaginator
     {
-        return Recipe::orderBy('title', 'asc')->paginate(25);
+        return Recipe::whereNotNull('title')->where('title', '!=', '')->orderBy('title', 'asc')->paginate(25);
     }
 
-    public function toggleStatus($mealId)
+    public function toggleStatus($mealId): Recipe
     {
         $recipe = Recipe::findOrFail($mealId);
         $recipe->active = !$recipe->active;
@@ -44,38 +30,8 @@ class RecipeService
         return $recipe;
     }
 
-    public function search($searchTerm){
-
+    public function search($searchTerm): LengthAwarePaginator
+    {
         return Recipe::orderBy('title', 'ASC')->where('title', 'LIKE', '%' . $searchTerm . '%')->paginate(10);
     }
-
-        public function uploadImageToS3($file, $filename)
-    {
-        try {
-            $path = Storage::disk('s3')->put(
-                config('cloudfront.bucket_path'),
-                $file,
-                $filename,
-                'private' // Changed to private since we're using CloudFront
-            );
-
-            return $this->getImageUrl($filename);
-        } catch (\Exception $e) {
-            Log::error('S3 upload failed: ' . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    private function getImageUrl($filename)
-    {
-        if (empty($filename)) {
-            return null;
-        }
-
-        $cloudFrontUrl = rtrim(config('cloudfront.url'), '/');
-        $bucketPath = trim(config('cloudfront.bucket_path'), '/');
-
-        return "{$cloudFrontUrl}/{$bucketPath}/{$filename}";
-    }
-
 }
