@@ -25,32 +25,24 @@ class RecipeController extends Controller
         ]);
     }
 
-    public function getList(): JsonResponse
+    public function getList(Request $request): JsonResponse
     {
         try {
-            $list = $this->recipeService->getRecipeList();
+            $activeDirection = $request->query('active_direction', 'desc');
+            $titleDirection = $request->query('title_direction', 'asc');
+            $list = $this->recipeService->getRecipeList($activeDirection, $titleDirection);
             return response()->json($list);
         } catch (\Exception $e) {
-            /* \Log::error('Recipe list error: ' . $e->getMessage()); */
             return response()->json(['error' => 'Failed to fetch recipes'], 500);
         }
-    }
-
-    public function toggleStatus($mealId){
-        $recipe = $this->recipeService->toggleStatus($mealId);
-        return response()->json($recipe, 200, [
-            'Access-Control-Allow-Origin' => '*',
-            'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS, PUT, DELETE',
-            'Access-Control-Allow-Headers' => 'Origin, Content-Type, X-Auth-Token'
-        ]);
     }
 
     public function search(Request $request)
     {
         $searchTerm = $request->query('q');
-
-        $recipes = $this->recipeService->search($searchTerm);
-
+        $activeDirection = $request->query('active_direction', 'desc');
+        $titleDirection = $request->query('title_direction', 'asc');
+        $recipes = $this->recipeService->search($searchTerm, $activeDirection, $titleDirection);
         return response()->json($recipes);
     }
 }

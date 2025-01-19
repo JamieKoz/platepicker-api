@@ -17,9 +17,21 @@ class RecipeService
         return $recipes;
     }
 
-    public function getRecipeList(): LengthAwarePaginator
+    public function getRecipeList(string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return Recipe::whereNotNull('title')->where('title', '!=', '')->orderBy('title', 'asc')->paginate(25);
+        return Recipe::whereNotNull('title')
+            ->where('title', '!=', '')
+            ->orderBy('active', $activeDirection)
+            ->orderBy('title', $titleDirection)
+            ->paginate(25);
+    }
+
+    public function search($searchTerm, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
+    {
+        return Recipe::where('title', 'LIKE', '%' . $searchTerm . '%')
+            ->orderBy('active', $activeDirection)
+            ->orderBy('title', $titleDirection)
+            ->paginate(10);
     }
 
     public function toggleStatus($mealId): Recipe
@@ -28,10 +40,5 @@ class RecipeService
         $recipe->active = !$recipe->active;
         $recipe->save();
         return $recipe;
-    }
-
-    public function search($searchTerm): LengthAwarePaginator
-    {
-        return Recipe::orderBy('title', 'ASC')->where('title', 'LIKE', '%' . $searchTerm . '%')->paginate(10);
     }
 }
