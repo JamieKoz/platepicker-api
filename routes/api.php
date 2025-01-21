@@ -23,6 +23,9 @@ Route::get('/list', [RecipeController::class, 'getList']);
 Route::post('/meal/{mealId}/toggle-status', [RecipeController::class, 'toggleStatus']);
 Route::get('/search', [RecipeController::class, 'search']);
 
+Route::post('/meal', [RecipeController::class, 'store']);
+Route::post('/meal/{id}', [RecipeController::class, 'update']);
+
 Route::post('/register', RegisterController::class );
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');

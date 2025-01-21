@@ -46,7 +46,8 @@ RUN mkdir -p bootstrap/cache \
     && chmod 775 database \
     && chmod 664 database/database.sqlite
 # Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+RUN composer require league/flysystem-aws-s3-v3 \
+    && composer install --no-dev --optimize-autoloader
 # Final permission setup and storage link
 RUN php artisan storage:link \
     && chown -R www-data:www-data storage bootstrap/cache \

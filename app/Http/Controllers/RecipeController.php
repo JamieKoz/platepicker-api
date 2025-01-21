@@ -45,4 +45,39 @@ class RecipeController extends Controller
         $recipes = $this->recipeService->search($searchTerm, $activeDirection, $titleDirection);
         return response()->json($recipes);
     }
+
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'ingredients' => 'string',
+                'instructions' => 'string',
+                'image' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+                'active' => 'nullable|boolean'
+            ]);
+
+            $recipe = $this->recipeService->createRecipe($validated);
+            return response()->json($recipe, 201);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to create recipe'], 500);
+        }
+    }
+
+    public function update(Request $request, $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+                'active' => 'nullable|boolean'
+            ]);
+
+            $recipe = $this->recipeService->updateRecipe($id, $validated);
+            return response()->json($recipe);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to update recipe'], 500);
+        }
+    }
 }
