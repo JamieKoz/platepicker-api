@@ -17,15 +17,13 @@ use App\Http\Controllers\RecipeController;
 |
 */
 
-
 Route::get('/recipe', [RecipeController::class, 'getRecipe']);
-Route::get('/list', [RecipeController::class, 'getList']);
-Route::post('/meal/{mealId}/toggle-status', [RecipeController::class, 'toggleStatus']);
-Route::get('/search', [RecipeController::class, 'search']);
+Route::get('/user-meals/list', [RecipeController::class, 'getList']);
+Route::get('/user-meals/search', [RecipeController::class, 'search']);
+Route::post('/user-meals', [RecipeController::class, 'store']);
+Route::post('/user-meals/{id}', [RecipeController::class, 'update']);
+Route::post('/user-meals/{id}/toggle-status', [RecipeController::class, 'toggleStatus']);
 
-Route::post('/meal', [RecipeController::class, 'store']);
-Route::post('/meal/{id}', [RecipeController::class, 'update']);
-
-Route::post('/register', RegisterController::class );
-Route::post('/login', [LoginController::class, 'login']);
-Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
+Route::get('/recipes', [RecipeController::class, 'getRecipes']);
+Route::post('/user-meals/add-from-recipe/{id}', [RecipeController::class, 'addFromRecipe']);
+Route::delete('/user-meals/{id}', [RecipeController::class, 'destroy']);

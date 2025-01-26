@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\RecipeService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -20,6 +21,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'auth_id',
         'password',
     ];
 
@@ -41,4 +43,18 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    public function meals()
+    {
+        return $this->belongsToMany(Recipe::class, 'user_meals')
+            ->withPivot('active')
+            ->withTimestamps();
+    }
+
+    protected static function booted() {
+        static::created(function ($user) {
+        $recipeService = app(RecipeService::class);
+            $recipeService->assignInitialMealsToUser($user);
+        });
+    }
 }

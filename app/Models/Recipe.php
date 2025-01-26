@@ -38,4 +38,11 @@ class Recipe extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'user_meals')
+            ->withPivot('active')
+            ->withTimestamps();
+    }
 }
