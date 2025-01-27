@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Recipe;
 use App\Models\User;
 use App\Models\UserMeal;
+use App\Models\UserMealTally;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -170,5 +172,24 @@ class RecipeService
             ->where('user_id', $user->id)
             ->firstOrFail()
             ->delete();
+    }
+
+    public function incrementMealTally(string $authId, int $mealId): void
+    {
+        $user = User::where('auth_id', $authId)->firstOrFail();
+
+        $tally = UserMealTally::firstOrNew([
+            'user_id' => $user->id,
+            'recipe_id' => $mealId
+        ]);
+
+        if (!$tally->exists) {
+            $tally->tally = 1;
+        } else {
+            $tally->tally = $tally->tally + 1;
+        }
+
+        $tally->last_selected_at = now();
+        $tally->save();
     }
 }

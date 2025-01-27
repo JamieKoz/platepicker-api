@@ -27,3 +27,4 @@ Route::post('/user-meals/{id}/toggle-status', [RecipeController::class, 'toggleS
 Route::get('/recipes', [RecipeController::class, 'getRecipes']);
 Route::post('/user-meals/add-from-recipe/{id}', [RecipeController::class, 'addFromRecipe']);
 Route::delete('/user-meals/{id}', [RecipeController::class, 'destroy']);
+Route::post('/user-meals/{id}/increment-tally', [RecipeController::class, 'incrementTally']);

@@ -168,4 +168,21 @@ class RecipeController extends Controller
             return response()->json(['error' => 'Failed to delete meal'], 500);
         }
     }
+
+    public function incrementTally(Request $request, $id): JsonResponse
+    {
+        try {
+            $authId = $request->header('X-User-ID');
+            if (!$authId) {
+                return response()->json(['error' => 'User ID required'], 400);
+            }
+
+            $this->recipeService->incrementMealTally($authId, $id);
+            return response()->json(['message' => 'Tally incremented successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['error' =>$e->getMessage()], 500);
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'Failed to increment tally'], 500);
+        }
+    }
 }
