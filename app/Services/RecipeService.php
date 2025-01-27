@@ -15,10 +15,19 @@ class RecipeService
 {
     public function getRandomRecipesActive($count = 27): Collection
     {
-        $recipes = UserMeal::inRandomOrder()->where('active', 1)->take($count)->get();
+        $recipes = UserMeal::with('recipe')
+            ->select('user_meals.*')
+            ->join('recipes', 'user_meals.recipe_id', '=', 'recipes.id')
+            ->inRandomOrder()
+            ->where('user_meals.active', 1)
+            ->groupBy('recipes.id')
+            ->take($count)
+            ->get();
+
         foreach ($recipes as $recipe) {
             $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
         }
+
         return $recipes;
     }
 
@@ -173,22 +182,4 @@ class RecipeService
             ->delete();
     }
 
-    public function incrementMealTally(string $authId, int $mealId): void
-    {
-        $user = User::where('auth_id', $authId)->firstOrFail();
-
-        $tally = UserMealTally::firstOrNew([
-            'user_id' => $user->id,
-            'recipe_id' => $mealId
-        ]);
-
-        if (!$tally->exists) {
-            $tally->tally = 1;
-        } else {
-            $tally->tally = $tally->tally + 1;
-        }
-
-        $tally->last_selected_at = now();
-        $tally->save();
-    }
 }

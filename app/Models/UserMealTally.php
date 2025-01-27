@@ -22,9 +22,10 @@ class UserMealTally extends Model
         'last_selected_at' => 'datetime',
     ];
 
-    public function recipe()
+    public function userMeal()
     {
-        return $this->belongsTo(Recipe::class);
+        return $this->belongsTo(UserMeal::class, 'recipe_id', 'recipe_id')
+            ->where('user_meals.user_id', $this->user_id);
     }
 
     public function incrementSelection()

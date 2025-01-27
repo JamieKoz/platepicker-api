@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\RecipeService;
+use App\Services\TallyService;
 use App\Services\UserService;
 use Illuminate\Support\Facades\Log;
 
@@ -12,11 +13,13 @@ class RecipeController extends Controller
 {
     protected $recipeService;
     protected $userService;
+    protected $tallyService;
 
-    public function __construct(RecipeService $recipeService, UserService $userService)
+    public function __construct(RecipeService $recipeService, UserService $userService, TallyService $tallyService)
     {
         $this->recipeService = $recipeService;
         $this->userService = $userService;
+        $this->tallyService = $tallyService;
     }
 
     public function getRecipe()
@@ -177,7 +180,7 @@ class RecipeController extends Controller
                 return response()->json(['error' => 'User ID required'], 400);
             }
 
-            $this->recipeService->incrementMealTally($authId, $id);
+            $this->tallyService->incrementMealTally($authId, $id);
             return response()->json(['message' => 'Tally incremented successfully']);
         } catch (\Exception $e) {
             return response()->json(['error' =>$e->getMessage()], 500);

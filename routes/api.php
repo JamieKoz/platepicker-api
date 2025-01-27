@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\LoginController;
-
+use App\Http\Controllers\TallyController;
 use App\Http\Controllers\RecipeController;
 /*
 |--------------------------------------------------------------------------
@@ -28,3 +28,5 @@ Route::get('/recipes', [RecipeController::class, 'getRecipes']);
 Route::post('/user-meals/add-from-recipe/{id}', [RecipeController::class, 'addFromRecipe']);
 Route::delete('/user-meals/{id}', [RecipeController::class, 'destroy']);
 Route::post('/user-meals/{id}/increment-tally', [RecipeController::class, 'incrementTally']);
+
+Route::get('/user-meals/favourites', [TallyController::class, 'getFavourites']);
