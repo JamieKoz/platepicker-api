@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\TallyController;
 use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\RestaurantController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -30,3 +31,6 @@ Route::delete('/user-meals/{id}', [RecipeController::class, 'destroy']);
 Route::post('/user-meals/{id}/increment-tally', [RecipeController::class, 'incrementTally']);
 
 Route::get('/user-meals/favourites', [TallyController::class, 'getFavourites']);
+
+Route::get('/restaurants/nearby', [RestaurantController::class, 'getNearbyRestaurants']);
+Route::get('/restaurants/address-suggestions', [RestaurantController::class, 'getAddressSuggestions']);
