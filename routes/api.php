@@ -34,3 +34,4 @@ Route::get('/user-meals/favourites', [TallyController::class, 'getFavourites']);
 
 Route::get('/restaurants/nearby', [RestaurantController::class, 'getNearbyRestaurants']);
 Route::get('/restaurants/address-suggestions', [RestaurantController::class, 'getAddressSuggestions']);
+Route::get('/restaurants/reverse-geocode', [RestaurantController::class, 'reverseGeocode']);
