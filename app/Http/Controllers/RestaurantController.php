@@ -8,71 +8,6 @@ use Illuminate\Support\Facades\Cache;
 
 class RestaurantController extends Controller
 {
-    public function getNearbyRestaurants(Request $request)
-    {
-        $placeId = $request->query('place_id');
-        $cacheKey = "restaurants_{$placeId}";
-        if (Cache::has($cacheKey)) {
-            return response()->json(Cache::get($cacheKey));
-        }
-        // First get the place details
-        $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
-            'place_id' => $placeId,
-            'fields' => 'geometry', // Only get the geometry
-            'key' => config('services.google.maps_api_key')
-        ]);
-
-
-        $placeData = $placeResponse->json();
-
-        if (!isset($placeData['result']['geometry']['location'])) {
-            return response()->json([
-                'error' => 'Location not found',
-                'debug' => $placeData // Include debug info
-            ], 404);
-        }
-
-        $location = $placeData['result']['geometry']['location'];
-
-        // Then search for nearby restaurants
-        $placesResponse = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', [
-            'location' => $location['lat'] . ',' . $location['lng'],
-            'radius' => 10000,
-            'types' => 'restaurant',
-            /* 'rankby' => 'rating', */
-            'key' => config('services.google.maps_api_key')
-        ]);
-
-
-        if (!isset($placesResponse->json()['results'])) {
-            return response()->json([
-                'error' => 'No restaurants found',
-                'debug' => $placesResponse->json()
-            ], 404);
-        }
-
-        $restaurants = $placesResponse->json()['results'];
-
-        $restaurants = collect($restaurants)
-            ->take(54)
-            ->map(function ($restaurant) {
-                return [
-                    'place_id' => $restaurant['place_id'],
-                    'name' => $restaurant['name'],
-                    'vicinity' => $restaurant['vicinity'],
-                    'rating' => $restaurant['rating'] ?? null,
-                    'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
-                    'price_level' => $restaurant['price_level'] ?? null,
-                    'photos' => $restaurant['photos'] ?? [],
-                    'opening_hours' => $restaurant['opening_hours'] ?? null,
-                ];
-            })
-            ->values();
-        Cache::put($cacheKey, $restaurants, now()->addHour());
-
-        return response()->json($restaurants);
-    }
-
     public function getAddressSuggestions(Request $request)
     {
         $query = $request->query('input');
@@ -95,33 +30,144 @@ class RestaurantController extends Controller
     {
         $lat = $request->query('lat');
         $lng = $request->query('lng');
-
         $cacheKey = "geocode_{$lat}_{$lng}";
-        if(Cache::has($cacheKey)){
-            return response()->json(Cache::get($cacheKey));
-            }
 
-        $response = Http::get('https://maps.googleapis.com/maps/api/geocode/json', [
-            'latlng' => "{$lat},{$lng}",
+        /* if (Cache::has($cacheKey)) { */
+        /*     return response()->json(Cache::get($cacheKey)); */
+        /* } */
+
+        // Directly search for nearby restaurants
+        $placesResponse = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', [
+            'location' => "{$lat},{$lng}",
+            'radius' => 12000,
+            'type' => 'restaurant',
             'key' => config('services.google.maps_api_key')
         ]);
 
-        $data = $response->json();
-
-        if (!empty($data['results'])) {
-            // Get the first result as it's usually the most accurate
-            $result = $data['results'][0];
-            $responseData = [
-                'place_id' => $result['place_id'],
-                'description' => $result['formatted_address']
-            ];
-            Cache::put($cacheKey, $responseData, now()->addHour());
-
-            return response()->json($responseData);
+        if (!isset($placesResponse->json()['results'])) {
+            return response()->json([
+                'error' => 'No restaurants found'
+            ], 404);
         }
 
-        return response()->json([
-            'error' => 'No address found'
-        ], 404);
+        $restaurants = collect($placesResponse->json()['results'])
+        ->filter(function ($restaurant) {
+            $blacklist = ['bp', 'bp truckstop', '7-eleven', ];
+            return !in_array(strtolower($restaurant['name']), $blacklist);
+        })
+            ->take(25)
+            ->map(function ($restaurant) {
+                // Get detailed place information for each restaurant
+                $detailsResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
+                    'place_id' => $restaurant['place_id'],
+                    'fields' => 'photos',
+                    'key' => config('services.google.maps_api_key')
+                ]);
+
+                $details = $detailsResponse->json();
+
+                // Combine photos from both sources and limit to 5
+                $photos = collect($details['result']['photos'] ?? [])
+                    ->merge($restaurant['photos'] ?? [])
+                    ->unique('photo_reference')
+                    ->take(5)
+                    ->values()
+                    ->all();
+
+                return [
+                    'place_id' => $restaurant['place_id'],
+                    'name' => $restaurant['name'],
+                    'vicinity' => $restaurant['vicinity'],
+                    'rating' => $restaurant['rating'] ?? null,
+                    'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
+                    'price_level' => $restaurant['price_level'] ?? null,
+                    'photos' => $photos,
+                    'opening_hours' => $restaurant['opening_hours'] ?? null,
+                ];
+            })
+            ->shuffle()->values();
+
+        Cache::put($cacheKey, $restaurants, now()->addHour());
+        return response()->json($restaurants);
+    }
+
+    public function getNearbyRestaurants(Request $request)
+    {
+        $placeId = $request->query('place_id');
+        $cacheKey = "restaurants_{$placeId}";
+
+        /* if (Cache::has($cacheKey)) { */
+        /*     return response()->json(Cache::get($cacheKey)); */
+        /* } */
+
+        // Get location first
+        $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
+            'place_id' => $placeId,
+            'fields' => 'geometry',
+            'key' => config('services.google.maps_api_key')
+        ]);
+
+        $placeData = $placeResponse->json();
+
+        if (!isset($placeData['result']['geometry']['location'])) {
+            return response()->json([
+                'error' => 'Location not found'
+            ], 404);
+        }
+
+        $location = $placeData['result']['geometry']['location'];
+
+        // Get nearby restaurants
+        $placesResponse = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', [
+            'location' => $location['lat'] . ',' . $location['lng'],
+            'radius' => 12000,
+            'type' => 'restaurant',
+            'key' => config('services.google.maps_api_key')
+        ]);
+
+        if (!isset($placesResponse->json()['results'])) {
+            return response()->json([
+                'error' => 'No restaurants found'
+            ], 404);
+        }
+
+        $restaurants = collect($placesResponse->json()['results'])
+            ->filter(function ($restaurant) {
+                $blacklist = ['bp', 'bp truckstop', 'station', 'convenience store'];
+                return !in_array(strtolower($restaurant['name']), $blacklist);
+            })
+            ->take(25)
+            ->map(function ($restaurant) {
+                // Get detailed place information for each restaurant
+                $detailsResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
+                    'place_id' => $restaurant['place_id'],
+                    'fields' => 'photos',
+                    'key' => config('services.google.maps_api_key')
+                ]);
+
+                $details = $detailsResponse->json();
+
+                $photos = collect($details['result']['photos'] ?? [])
+                    ->merge($restaurant['photos'] ?? [])
+                    ->unique('photo_reference')
+                    ->take(5)
+                    ->values()
+                    ->all();
+
+                return [
+                    'place_id' => $restaurant['place_id'],
+                    'name' => $restaurant['name'],
+                    'vicinity' => $restaurant['vicinity'],
+                    'rating' => $restaurant['rating'] ?? null,
+                    'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
+                    'price_level' => $restaurant['price_level'] ?? null,
+                    'photos' => $photos,
+                    'opening_hours' => $restaurant['opening_hours'] ?? null,
+                ];
+            })
+            ->shuffle()->values();
+
+        Cache::put($cacheKey, $restaurants, now()->addHour());
+        return response()->json($restaurants);
     }
 }
