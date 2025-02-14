@@ -5,9 +5,18 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
+use App\Services\RestaurantService;
 
 class RestaurantController extends Controller
 {
+    private $restaurantService;
+    private const CACHE_DURATION = 3600; // 1 hour
+
+    public function __construct(RestaurantService $restaurantService)
+    {
+        $this->restaurantService = $restaurantService;
+
+    }
     public function getAddressSuggestions(Request $request)
     {
         $query = $request->query('input');
@@ -30,75 +39,37 @@ class RestaurantController extends Controller
     {
         $lat = $request->query('lat');
         $lng = $request->query('lng');
-        $cacheKey = "geocode_{$lat}_{$lng}";
+        $cacheKey = "reverse_geocode_{$lat}_{$lng}";
 
-        /* if (Cache::has($cacheKey)) { */
-        /*     return response()->json(Cache::get($cacheKey)); */
-        /* } */
-
-        // Directly search for nearby restaurants
-        $placesResponse = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', [
-            'location' => "{$lat},{$lng}",
-            'radius' => 12000,
-            'type' => 'restaurant',
-            'key' => config('services.google.maps_api_key')
-        ]);
-
-        if (!isset($placesResponse->json()['results'])) {
-            return response()->json([
-                'error' => 'No restaurants found'
-            ], 404);
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
         }
 
-        $restaurants = collect($placesResponse->json()['results'])
-        ->filter(function ($restaurant) {
-            $blacklist = ['bp', 'bp truckstop', '7-eleven', ];
-            return !in_array(strtolower($restaurant['name']), $blacklist);
-        })
-            ->take(25)
-            ->map(function ($restaurant) {
-                // Get detailed place information for each restaurant
-                $detailsResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
-                    'place_id' => $restaurant['place_id'],
-                    'fields' => 'photos',
-                    'key' => config('services.google.maps_api_key')
-                ]);
+        $restaurants = $this->restaurantService->fetchAndProcessRestaurants($lat, $lng);
+        Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
 
-                $details = $detailsResponse->json();
-
-                // Combine photos from both sources and limit to 5
-                $photos = collect($details['result']['photos'] ?? [])
-                    ->merge($restaurant['photos'] ?? [])
-                    ->unique('photo_reference')
-                    ->take(5)
-                    ->values()
-                    ->all();
-
-                return [
-                    'place_id' => $restaurant['place_id'],
-                    'name' => $restaurant['name'],
-                    'vicinity' => $restaurant['vicinity'],
-                    'rating' => $restaurant['rating'] ?? null,
-                    'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
-                    'price_level' => $restaurant['price_level'] ?? null,
-                    'photos' => $photos,
-                    'opening_hours' => $restaurant['opening_hours'] ?? null,
-                ];
-            })
-            ->shuffle()->values();
-
-        Cache::put($cacheKey, $restaurants, now()->addHour());
         return response()->json($restaurants);
     }
+    // @TODO Better pattern match for duplicate restaurants.
+    // Would be ideal to check if the vicinity is in the name then to remove it
+    // and then hash the name. Hashes might be quicker to match.
+    // So for example we got 'Red Rooster Gladstone Park' and 'Gladstone park' is
+    // in the objects vicinity property, then we hash 'Red Rooster' and we can then check for that
+    // This func has become a bit of a mess.
+    // 1. We get results from all pages until we have enough results in our response.
+    // 2. We filter out garbage results where we can like hotels.
+    // 3. We blacklist duplicates from the results so Subway doesnt come up 10 times and we only use the nearest.
+    // 4. We merge the image results together with the restaurant so we can have 5 images per place.
+    // 5. We cache the result so this doesn't take 10 years to retrieve.
 
     public function getNearbyRestaurants(Request $request)
     {
         $placeId = $request->query('place_id');
         $cacheKey = "restaurants_{$placeId}";
 
-        /* if (Cache::has($cacheKey)) { */
-        /*     return response()->json(Cache::get($cacheKey)); */
-        /* } */
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
 
         // Get location first
         $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
@@ -117,57 +88,10 @@ class RestaurantController extends Controller
 
         $location = $placeData['result']['geometry']['location'];
 
-        // Get nearby restaurants
-        $placesResponse = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', [
-            'location' => $location['lat'] . ',' . $location['lng'],
-            'radius' => 12000,
-            'type' => 'restaurant',
-            'key' => config('services.google.maps_api_key')
-        ]);
+        $restaurants = $this->restaurantService->fetchAndProcessRestaurants($location['lat'], $location['lng']);
 
-        if (!isset($placesResponse->json()['results'])) {
-            return response()->json([
-                'error' => 'No restaurants found'
-            ], 404);
-        }
+        Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
 
-        $restaurants = collect($placesResponse->json()['results'])
-            ->filter(function ($restaurant) {
-                $blacklist = ['bp', 'bp truckstop', 'station', 'convenience store'];
-                return !in_array(strtolower($restaurant['name']), $blacklist);
-            })
-            ->take(25)
-            ->map(function ($restaurant) {
-                // Get detailed place information for each restaurant
-                $detailsResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
-                    'place_id' => $restaurant['place_id'],
-                    'fields' => 'photos',
-                    'key' => config('services.google.maps_api_key')
-                ]);
-
-                $details = $detailsResponse->json();
-
-                $photos = collect($details['result']['photos'] ?? [])
-                    ->merge($restaurant['photos'] ?? [])
-                    ->unique('photo_reference')
-                    ->take(5)
-                    ->values()
-                    ->all();
-
-                return [
-                    'place_id' => $restaurant['place_id'],
-                    'name' => $restaurant['name'],
-                    'vicinity' => $restaurant['vicinity'],
-                    'rating' => $restaurant['rating'] ?? null,
-                    'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
-                    'price_level' => $restaurant['price_level'] ?? null,
-                    'photos' => $photos,
-                    'opening_hours' => $restaurant['opening_hours'] ?? null,
-                ];
-            })
-            ->shuffle()->values();
-
-        Cache::put($cacheKey, $restaurants, now()->addHour());
         return response()->json($restaurants);
     }
 }
