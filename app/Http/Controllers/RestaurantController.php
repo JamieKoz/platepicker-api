@@ -10,13 +10,14 @@ use App\Services\RestaurantService;
 class RestaurantController extends Controller
 {
     private $restaurantService;
-    private const CACHE_DURATION = 3600; // 1 hour
+    private const CACHE_DURATION = 86400; // 24 hours
+    private const PHOTOS_CACHE_DURATION = 86400; // 24 hours
 
     public function __construct(RestaurantService $restaurantService)
     {
         $this->restaurantService = $restaurantService;
-
     }
+
     public function getAddressSuggestions(Request $request)
     {
         $query = $request->query('input');
@@ -25,13 +26,16 @@ class RestaurantController extends Controller
         if (Cache::has($cacheKey)) {
             return response()->json(Cache::get($cacheKey));
         }
+
         $response = Http::get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
             'input' => $query,
             'types' => 'address',
             'key' => config('services.google.maps_api_key')
         ]);
+
         $results = $response->json();
         Cache::put($cacheKey, $results, now()->addHour());
+
         return response()->json($results);
     }
 
@@ -50,26 +54,15 @@ class RestaurantController extends Controller
 
         return response()->json($restaurants);
     }
-    // @TODO Better pattern match for duplicate restaurants.
-    // Would be ideal to check if the vicinity is in the name then to remove it
-    // and then hash the name. Hashes might be quicker to match.
-    // So for example we got 'Red Rooster Gladstone Park' and 'Gladstone park' is
-    // in the objects vicinity property, then we hash 'Red Rooster' and we can then check for that
-    // This func has become a bit of a mess.
-    // 1. We get results from all pages until we have enough results in our response.
-    // 2. We filter out garbage results where we can like hotels.
-    // 3. We blacklist duplicates from the results so Subway doesnt come up 10 times and we only use the nearest.
-    // 4. We merge the image results together with the restaurant so we can have 5 images per place.
-    // 5. We cache the result so this doesn't take 10 years to retrieve.
 
     public function getNearbyRestaurants(Request $request)
     {
         $placeId = $request->query('place_id');
         $cacheKey = "restaurants_{$placeId}";
 
-        if (Cache::has($cacheKey)) {
-            return response()->json(Cache::get($cacheKey));
-        }
+        /* if (Cache::has($cacheKey)) { */
+        /*     return response()->json(Cache::get($cacheKey)); */
+        /* } */
 
         // Get location first
         $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
@@ -87,11 +80,58 @@ class RestaurantController extends Controller
         }
 
         $location = $placeData['result']['geometry']['location'];
-
-        $restaurants = $this->restaurantService->fetchAndProcessRestaurants($location['lat'], $location['lng']);
+        $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
+            (string)$location['lat'],
+            (string)$location['lng']
+        );
 
         Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
 
         return response()->json($restaurants);
+    }
+
+    /**
+     * Get additional photos for a restaurant
+     */
+    public function getRestaurantPhotos(string $placeId)
+    {
+        $cacheKey = "restaurant_detailed_photos_{$placeId}";
+
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
+
+        $photos = $this->restaurantService->fetchAdditionalPhotos($placeId);
+
+        // Convert photo references to URLs
+        $photoUrls = collect($photos)->map(function ($photo) {
+            return [
+                'url' => $this->getPhotoUrl($photo['photo_reference']),
+                'width' => $photo['width'] ?? 0,
+                'height' => $photo['height'] ?? 0,
+                'attributions' => $photo['html_attributions'] ?? []
+            ];
+        })->values()->all();
+
+        $result = [
+            'place_id' => $placeId,
+            'photos' => $photoUrls
+        ];
+
+        Cache::put($cacheKey, $result, now()->addSeconds(self::PHOTOS_CACHE_DURATION));
+
+        return response()->json($result);
+    }
+
+    /**
+     * Build a photo URL from a photo reference
+     */
+    private function getPhotoUrl(string $photoReference, int $maxWidth = 400): string
+    {
+        return 'https://maps.googleapis.com/maps/api/place/photo?' . http_build_query([
+            'maxwidth' => $maxWidth,
+            'photo_reference' => $photoReference,
+            'key' => config('services.google.maps_api_key')
+        ]);
     }
 }

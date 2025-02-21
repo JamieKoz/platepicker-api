@@ -5,11 +5,13 @@ namespace App\Services;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class RestaurantService
 {
     private const TARGET_RESULTS = 27;
     private const MAX_PAGES = 3;
+    private const FULL_PHOTO_COUNT = 5; // Maximum photos to fetch per restaurant
 
     private array $blacklistedTerms = [
         'bp',
@@ -30,7 +32,9 @@ class RestaurantService
 
     private array $validRestaurantTypes = ['restaurant', 'cafe', 'meal_takeaway', 'food', 'hamburger', 'greek'];
 
-
+    /**
+     * Fetch and process restaurants with minimal image data initially
+     */
     public function fetchAndProcessRestaurants(string $lat, string $lng): Collection
     {
         $processedResults = collect([]);
@@ -55,7 +59,7 @@ class RestaurantService
 
             // If we have a next page token and need more results, wait before next request
             if ($nextPageToken && $processedResults->count() < self::TARGET_RESULTS) {
-                sleep(1); // Google needs time to prepare the next page
+                usleep(250000); // 250ms delay (reduced from 1s to speed up response)
             }
         } while (
             $nextPageToken !== null &&
@@ -63,10 +67,59 @@ class RestaurantService
             $processedResults->count() < self::TARGET_RESULTS
         );
 
-        return $this->enrichWithPhotos($processedResults)
+        // Return restaurants with just ONE photo each for fast initial response
+        return $this->enrichWithInitialPhoto($processedResults)
             ->take(self::TARGET_RESULTS)
             ->shuffle()
             ->values();
+    }
+
+    /**
+     * Fetch additional photos for a specific restaurant
+     */
+    public function fetchAdditionalPhotos(string $placeId): array
+    {
+        $cacheKey = "restaurant_photos_{$placeId}";
+
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        try {
+            $details = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
+                'place_id' => $placeId,
+                'fields' => 'photos',
+                'key' => config('services.google.maps_api_key')
+            ])->json();
+
+            if (!isset($details['result']['photos'])) {
+                return [];
+            }
+
+            $photoReferences = collect($details['result']['photos'])
+                ->take(self::FULL_PHOTO_COUNT)
+                ->map(function ($photo) {
+                    return [
+                        'photo_reference' => $photo['photo_reference'],
+                        'height' => $photo['height'] ?? 0,
+                        'width' => $photo['width'] ?? 0,
+                        'html_attributions' => $photo['html_attributions'] ?? []
+                    ];
+                })
+                ->values()
+                ->all();
+
+            Cache::put($cacheKey, $photoReferences, now()->addDay());
+
+            return $photoReferences;
+        } catch (\Exception $e) {
+            Log::error('Error fetching additional photos', [
+                'place_id' => $placeId,
+                'error' => $e->getMessage()
+            ]);
+
+            return [];
+        }
     }
 
     private function fetchPage(string $lat, string $lng, ?string $pageToken = null): array
@@ -77,7 +130,6 @@ class RestaurantService
             return Cache::get($cacheKey);
         }
 
-        // Base parameters
         $params = [
             'location' => "{$lat},{$lng}",
             'type' => 'restaurant',
@@ -141,7 +193,6 @@ class RestaurantService
             }
         }
         return $uniqueRestaurants;
-
     }
 
     private function stripVicinityFromName(string $name, string $vicinity): string
@@ -157,6 +208,35 @@ class RestaurantService
         return trim($cleanName);
     }
 
+    /**
+     * Add just ONE photo per restaurant for initial fast response
+     */
+    private function enrichWithInitialPhoto(Collection $restaurants): Collection
+    {
+        return $restaurants->map(function ($restaurant) {
+            // Use photo from the initial API response if available
+            $initialPhoto = isset($restaurant['photos'][0]) ? $restaurant['photos'][0] : null;
+
+            // Check if we need to indicate more photos are available
+            $hasMorePhotos = count($restaurant['photos'] ?? []) > 1;
+
+            return [
+                'place_id' => $restaurant['place_id'],
+                'name' => $restaurant['name'],
+                'vicinity' => $restaurant['vicinity'],
+                'rating' => $restaurant['rating'] ?? null,
+                'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
+                'price_level' => $restaurant['price_level'] ?? null,
+                'primary_photo' => $initialPhoto, // Just include one photo initially
+                'has_additional_photos' => $hasMorePhotos, // Flag to indicate more photos exist
+                'opening_hours' => $restaurant['opening_hours'] ?? null,
+            ];
+        });
+    }
+
+    /**
+     * Original full enrichment with photos - use this for the additional photos endpoint
+     */
     private function enrichWithPhotos(Collection $restaurants): Collection
     {
         return $restaurants->map(function ($restaurant) {
@@ -169,7 +249,7 @@ class RestaurantService
             $photos = collect($details['result']['photos'] ?? [])
                 ->merge($restaurant['photos'] ?? [])
                 ->unique('photo_reference')
-                ->take(5)
+                ->take(self::FULL_PHOTO_COUNT)
                 ->values()
                 ->all();
 
@@ -185,5 +265,4 @@ class RestaurantService
             ];
         });
     }
-
 }
