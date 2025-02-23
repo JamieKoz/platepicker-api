@@ -31,6 +31,7 @@ Route::delete('/user-meals/{id}', [RecipeController::class, 'destroy']);
 Route::post('/user-meals/{id}/increment-tally', [RecipeController::class, 'incrementTally']);
 
 Route::get('/user-meals/favourites', [TallyController::class, 'getFavourites']);
+Route::get('/user-meals/top-meals', [TallyController::class, 'getTopMeals']);
 
 Route::get('/restaurants/nearby', [RestaurantController::class, 'getNearbyRestaurants']);
 Route::get('/restaurants/address-suggestions', [RestaurantController::class, 'getAddressSuggestions']);

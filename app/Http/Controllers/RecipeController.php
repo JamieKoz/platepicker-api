@@ -177,7 +177,7 @@ class RecipeController extends Controller
         try {
             $authId = $request->header('X-User-ID');
             if (!$authId) {
-                return response()->json(['error' => 'User ID required'], 400);
+                return response()->json(['error' => 'User ID required'], 200);
             }
 
             $this->tallyService->incrementMealTally($authId, $id);

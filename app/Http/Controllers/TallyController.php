@@ -38,4 +38,20 @@ class TallyController extends Controller
             return response()->json(['error' => 'Failed to get favorites'], 500);
         }
     }
+
+    public function getTopMeals()
+    {
+        try {
+            $topRecipes = $this->tallyService->getTopMeals();
+            return response()->json($topRecipes);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getTraceAsString()], 500);
+            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error('Error getting favorites', [
+                'error' => $e->getMessage(),
+                'auth_id' => $authId
+            ]);
+            return response()->json(['error' => 'Failed to get favorites'], 500);
+        }
+    }
 }

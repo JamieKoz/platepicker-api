@@ -5,6 +5,7 @@ use App\Models\UserMeal;
 use App\Models\Recipe;
 use App\Models\UserMealTally;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class TallyService
 {
@@ -94,5 +95,43 @@ class TallyService
 
         $tally->last_selected_at = now();
         $tally->save();
+    }
+
+    public function getTopMeals()
+    {
+        return UserMealTally::select('recipe_id', DB::raw('SUM(tally) as total_tally'))
+            ->groupBy('recipe_id')
+            ->orderBy('total_tally', 'desc')
+            ->take(3)
+            ->get()
+            ->map(function ($tally) {
+                $recipe = Recipe::find($tally->recipe_id);
+
+                if (!$recipe) {
+                    Log::warning('No recipe found for top meal tally', [
+                        'recipe_id' => $tally->recipe_id,
+                        'total_tally' => $tally->total_tally
+                    ]);
+                    return null;
+                }
+
+                return [
+                    'total_tally' => $tally->total_tally,
+                    'meal' => [
+                        'id' => $recipe->id,
+                        'title' => $recipe->title,
+                        'ingredients' => $recipe->ingredients,
+                        'instructions' => $recipe->instructions,
+                        'image_name' => $recipe->image_name,
+                        'recipe_id' => $recipe->id,
+                        'cleaned_ingredients' => $recipe->cleaned_ingredients,
+                        'active' => true,
+                        'created_at' => $recipe->created_at,
+                        'updated_at' => $recipe->updated_at
+                    ]
+                ];
+            })
+            ->filter()
+            ->values();
     }
 }
