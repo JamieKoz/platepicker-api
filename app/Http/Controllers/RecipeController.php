@@ -22,9 +22,16 @@ class RecipeController extends Controller
         $this->tallyService = $tallyService;
     }
 
-    public function getRecipe()
+    public function getRecipe(Request $request)
     {
-        $recipes = $this->recipeService->getRandomRecipesActive(27);
+        $userId = $request->header('X-User-ID');
+
+        if (!empty($userId)) {
+            $recipes = $this->recipeService->getRandomRecipesActive(27, $userId);
+            return response()->json($recipes, 200);
+        }
+
+        $recipes = $this->recipeService->getRandomRecipesUnauthorized(27);
 
         return response()->json($recipes, 200, [
             'Access-Control-Allow-Origin' => '*',
@@ -76,6 +83,9 @@ class RecipeController extends Controller
                 'title' => 'required|string|max:255',
                 'ingredients' => 'string',
                 'instructions' => 'string',
+                'cooking_time' => 'nullable|string',
+                'serves' => 'nullable|string',
+                'dietary' => 'nullable|string',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);
@@ -100,6 +110,9 @@ class RecipeController extends Controller
                 'title' => 'required|string|max:255',
                 'ingredients' => 'nullable|string',
                 'instructions' => 'nullable|string',
+                'cooking_time' => 'nullable|string',
+                'serves' => 'nullable|string',
+                'dietary' => 'nullable|string',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);

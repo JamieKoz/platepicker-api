@@ -13,21 +13,35 @@ use Illuminate\Support\Facades\Storage;
 
 class RecipeService
 {
-    public function getRandomRecipesActive($count = 27): Collection
+    public function getRandomRecipesUnauthorized($count = 27): Collection
     {
-        $recipes = UserMeal::with('recipe')
-            ->select('user_meals.*')
-            ->join('recipes', 'user_meals.recipe_id', '=', 'recipes.id')
+        $recipes = Recipe::query()
             ->inRandomOrder()
-            ->where('user_meals.active', 1)
-            ->groupBy('recipes.id')
+            ->where('active', 1)
             ->take($count)
             ->get();
 
         foreach ($recipes as $recipe) {
             $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
         }
+        return $recipes;
+    }
 
+    public function getRandomRecipesActive($count = 27, $userId): Collection
+    {
+        $user = User::where('auth_id', $userId)->firstOrFail();
+
+        $recipes = UserMeal::with('recipe')
+            ->select('user_meals.*')
+            ->inRandomOrder()
+            ->where('user_meals.active', 1)
+            ->where('user_meals.user_id', $user->id)
+            ->take($count)
+            ->get();
+
+        foreach ($recipes as $recipe) {
+            $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
+        }
         return $recipes;
     }
 
@@ -48,6 +62,9 @@ class RecipeService
                 'ingredients' => $recipe->ingredients,
                 'instructions' => $recipe->instructions,
                 'image_name' => $recipe->image_name,
+                'cooking_time' => $recipe->cooking_time,
+                'serves' => $recipe->serves,
+                'dietary' => $recipe->dietary,
                 'cleaned_ingredients' => $recipe->cleaned_ingredients
             ]);
         }
@@ -63,6 +80,9 @@ class RecipeService
         $userMeal->ingredients = $data['ingredients'];
         $userMeal->instructions = $data['instructions'];
         $userMeal->cleaned_ingredients = $data['ingredients'];
+        $userMeal->cooking_time = $data['cooking_time'];
+        $userMeal->serves = $data['serves'];
+        $userMeal->dietary = $data['dietary'];
         $userMeal->active = true;
 
         if (isset($data['image'])) {
@@ -95,6 +115,9 @@ class RecipeService
             'ingredients' => $data['ingredients'] ?? $userMeal->ingredients,
             'instructions' => $data['instructions'] ?? $userMeal->instructions,
             'cleaned_ingredients' => $data['ingredients'] ?? $userMeal->cleaned_ingredients,
+            'cooking_time' => $data['cooking_time'] ?? $userMeal->cooking_time,
+            'serves' => $data['serves'] ?? $userMeal->serves,
+            'dietary' => $data['dietary'] ?? $userMeal->dietary,
         ]);
 
         if (isset($data['image'])) {
@@ -168,6 +191,9 @@ class RecipeService
             'instructions' => $recipe->instructions,
             'image_name' => $recipe->image_name,
             'cleaned_ingredients' => $recipe->cleaned_ingredients,
+            'cooking_time' => $recipe->cooking_time,
+            'serves' => $recipe->serves,
+            'dietary' => $recipe->dietary,
             'active' => true
         ]);
     }

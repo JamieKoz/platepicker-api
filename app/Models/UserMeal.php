@@ -19,7 +19,10 @@ class UserMeal extends Model
         'ingredients',
         'instructions',
         'image_name',
-        'cleaned_ingredients'
+        'cleaned_ingredients',
+        'serves',
+        'cooking_time',
+        'dietary',
     ];
 
     public function recipe()

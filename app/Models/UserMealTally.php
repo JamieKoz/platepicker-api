@@ -28,6 +28,11 @@ class UserMealTally extends Model
             ->where('user_meals.user_id', $this->user_id);
     }
 
+    public function recipe()
+    {
+        return $this->belongsTo(Recipe::class, 'recipe_id');
+    }
+
     public function incrementSelection()
     {
         $this->tally++;

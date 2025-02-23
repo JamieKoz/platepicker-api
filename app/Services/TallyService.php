@@ -48,6 +48,9 @@ class TallyService
                             'image_name' => $recipe->image_name,
                             'recipe_id' => $recipe->id,
                             'cleaned_ingredients' => $recipe->cleaned_ingredients,
+                            'serves' => $recipe->serves,
+                            'cooking_time' => $recipe->cooking_time,
+                            'dietary' => $recipe->dietary,
                             'active' => true,
                             'created_at' => $recipe->created_at,
                             'updated_at' => $recipe->updated_at
@@ -67,6 +70,9 @@ class TallyService
                         'instructions' => $userMeal->instructions,
                         'image_name' => $userMeal->image_name,
                         'recipe_id' => $userMeal->recipe_id,
+                        'serves' => $userMeal->serves,
+                        'cooking_time' => $userMeal->cooking_time,
+                        'dietary' => $userMeal->dietary,
                         'cleaned_ingredients' => $userMeal->cleaned_ingredients,
                         'active' => $userMeal->active,
                         'created_at' => $userMeal->created_at,
@@ -78,13 +84,30 @@ class TallyService
             ->values();
     }
 
-    public function incrementMealTally(string $authId, int $mealId): void
+    public function incrementMealTally(string $userId, int $mealId): void
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
+        $user = User::where('auth_id', $userId)->firstOrFail();
+        $userMeal = UserMeal::find($mealId);
+
+        // If not found as UserMeal, check if it's a recipe
+        $recipe = Recipe::find($mealId);
+
+        // Determine which ID to use for the tally
+        $recipeId = null;
+        if ($userMeal) {
+            // If it's a user meal, use its recipe_id if it has one, otherwise use its own id
+            $recipeId = $userMeal->recipe_id ?? $userMeal->id;
+        } elseif ($recipe) {
+            // If it's a recipe, use its id
+            $recipeId = $recipe->id;
+        } else {
+            // If neither found, use the provided ID
+            $recipeId = $mealId;
+        }
 
         $tally = UserMealTally::firstOrNew([
             'user_id' => $user->id,
-            'recipe_id' => $mealId
+            'recipe_id' => $recipeId
         ]);
 
         if (!$tally->exists) {
@@ -124,6 +147,9 @@ class TallyService
                         'instructions' => $recipe->instructions,
                         'image_name' => $recipe->image_name,
                         'recipe_id' => $recipe->id,
+                        'serves' => $recipe->serves,
+                        'cooking_time' => $recipe->cooking_time,
+                        'dietary' => $recipe->dietary,
                         'cleaned_ingredients' => $recipe->cleaned_ingredients,
                         'active' => true,
                         'created_at' => $recipe->created_at,

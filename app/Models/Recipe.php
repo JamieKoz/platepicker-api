@@ -27,6 +27,9 @@ class Recipe extends Model
         'ingredients',
         'image_name',
         'cleaned_ingredients',
+        'serves',
+        'dietary',
+        'cooking_time',
     ];
 
     /**
