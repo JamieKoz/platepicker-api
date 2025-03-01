@@ -37,3 +37,4 @@ Route::get('/restaurants/nearby', [RestaurantController::class, 'getNearbyRestau
 Route::get('/restaurants/address-suggestions', [RestaurantController::class, 'getAddressSuggestions']);
 Route::get('/restaurants/reverse-geocode', [RestaurantController::class, 'reverseGeocode']);
 Route::get('/restaurants/photos/{placeId}', [RestaurantController::class, 'getRestaurantPhotos']);
+Route::get('/restaurants/photo-proxy', [RestaurantController::class, 'getPhotoProxy']);

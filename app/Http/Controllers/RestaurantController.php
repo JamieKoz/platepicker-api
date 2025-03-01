@@ -12,6 +12,7 @@ class RestaurantController extends Controller
     private $restaurantService;
     private const CACHE_DURATION = 86400; // 24 hours
     private const PHOTOS_CACHE_DURATION = 86400; // 24 hours
+    private const MAX_PHOTOS = 5; // Maximum photos to return
 
     public function __construct(RestaurantService $restaurantService)
     {
@@ -50,6 +51,14 @@ class RestaurantController extends Controller
         }
 
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants($lat, $lng);
+
+        // Pre-process restaurants to include a primary photo directly
+        foreach ($restaurants as $index => $restaurant) {
+            if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {
+                $restaurants[$index]['primary_photo'] = array_shift($restaurant['photos']);
+            }
+        }
+
         Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
 
         return response()->json($restaurants);
@@ -60,9 +69,9 @@ class RestaurantController extends Controller
         $placeId = $request->query('place_id');
         $cacheKey = "restaurants_{$placeId}";
 
-        /* if (Cache::has($cacheKey)) { */
-        /*     return response()->json(Cache::get($cacheKey)); */
-        /* } */
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
 
         // Get location first
         $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
@@ -85,6 +94,13 @@ class RestaurantController extends Controller
             (string)$location['lng']
         );
 
+        // Pre-process restaurants to include a primary photo directly
+        foreach ($restaurants as $index => $restaurant) {
+            if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {
+                $restaurants[$index]['primary_photo'] = array_shift($restaurant['photos']);
+            }
+        }
+
         Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
 
         return response()->json($restaurants);
@@ -103,13 +119,16 @@ class RestaurantController extends Controller
 
         $photos = $this->restaurantService->fetchAdditionalPhotos($placeId);
 
-        // Convert photo references to URLs
+        // Limit to maximum photos
+        $photos = array_slice($photos, 0, self::MAX_PHOTOS);
+
+        // Convert photo references to URLs with optimized sizes
         $photoUrls = collect($photos)->map(function ($photo) {
             return [
-                'url' => $this->getPhotoUrl($photo['photo_reference']),
-                'width' => $photo['width'] ?? 0,
-                'height' => $photo['height'] ?? 0,
-                'attributions' => $photo['html_attributions'] ?? []
+                'url' => $this->getPhotoUrl($photo['photo_reference'], 400, 300), // Smaller size
+                'width' => $photo['width'] ?? 400,
+                'height' => $photo['height'] ?? 300,
+                'photo_reference' => $photo['photo_reference'] ?? '',
             ];
         })->values()->all();
 
@@ -126,12 +145,79 @@ class RestaurantController extends Controller
     /**
      * Build a photo URL from a photo reference
      */
-    private function getPhotoUrl(string $photoReference, int $maxWidth = 400): string
+    private function getPhotoUrl(string $photoReference, int $maxWidth = 800, int $maxHeight = 350): string
     {
+        if (strpos($photoReference, 'maps.googleapis.com/maps/api/place/photo') !== false) {
+            // Extract the actual photo reference from the URL
+            $matches = [];
+            if (preg_match('/photo_reference=([^&]+)/', $photoReference, $matches)) {
+                $photoReference = urldecode($matches[1]);
+            }
+        }
+
+        // Otherwise build the Places API URL
         return 'https://maps.googleapis.com/maps/api/place/photo?' . http_build_query([
             'maxwidth' => $maxWidth,
+            'maxheight' => $maxHeight,
             'photo_reference' => $photoReference,
             'key' => config('services.google.maps_api_key')
         ]);
+    }
+
+    public function getPhotoProxy(Request $request)
+    {
+        $photoReference = $request->query('photo_reference');
+        $maxWidth = $request->query('maxwidth', 800);
+        $maxHeight = $request->query('maxheight', 350);
+
+        if (!$photoReference) {
+            return response()->json(['error' => 'Photo reference is required'], 400);
+        }
+
+        // Generate a unique cache key for this photo
+        $cacheKey = "photo_proxy_" . md5($photoReference . $maxWidth . $maxHeight);
+
+        // Try to get from cache first
+        if (Cache::has($cacheKey)) {
+            $cachedPhoto = Cache::get($cacheKey);
+            return response($cachedPhoto['data'])
+                ->header('Content-Type', $cachedPhoto['content_type'])
+                ->header('Cache-Control', 'public, max-age=86400');
+        }
+
+        $photoUrl = "https://maps.googleapis.com/maps/api/place/photo?" . http_build_query([
+            'maxwidth' => $maxWidth,
+            'maxheight' => $maxHeight,
+            'photo_reference' => $photoReference,
+            'key' => config('services.google.maps_api_key')
+        ]);
+
+        try {
+            $response = Http::withOptions([
+                'allow_redirects' => true,
+                'timeout' => 5 // 5 second timeout
+            ])
+                ->withHeaders(['Accept' => 'image/*'])
+                ->get($photoUrl);
+
+            if ($response->successful()) {
+                $contentType = $response->header('Content-Type');
+                $photoData = $response->body();
+
+                // Store in cache
+                Cache::put($cacheKey, [
+                    'data' => $photoData,
+                    'content_type' => $contentType
+                ], now()->addDays(7)); // Cache for 7 days
+
+                return response($photoData)
+                    ->header('Content-Type', $contentType)
+                    ->header('Cache-Control', 'public, max-age=604800'); // 7 days
+            } else {
+                return response()->json(['error' => 'Failed to fetch photo'], $response->status());
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

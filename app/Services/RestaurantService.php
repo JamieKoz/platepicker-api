@@ -78,49 +78,56 @@ class RestaurantService
      * Fetch additional photos for a specific restaurant
      */
     public function fetchAdditionalPhotos(string $placeId): array
-    {
-        $cacheKey = "restaurant_photos_{$placeId}";
+{
+    $cacheKey = "restaurant_photos_{$placeId}";
 
-        if (Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
-        }
+    /* if (Cache::has($cacheKey)) { */
+    /*     return Cache::get($cacheKey); */
+    /* } */
 
-        try {
-            $details = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
-                'place_id' => $placeId,
-                'fields' => 'photos',
-                'key' => config('services.google.maps_api_key')
-            ])->json();
+    try {
+        $details = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
+            'place_id' => $placeId,
+            'fields' => 'photos',
+            'key' => config('services.google.maps_api_key')
+        ])->json();
 
-            if (!isset($details['result']['photos'])) {
-                return [];
-            }
+        // Log the raw response for debugging
+        Log::debug('Place details response', [
+            'place_id' => $placeId,
+            'response' => $details
+        ]);
 
-            $photoReferences = collect($details['result']['photos'])
-                ->take(self::FULL_PHOTO_COUNT)
-                ->map(function ($photo) {
-                    return [
-                        'photo_reference' => $photo['photo_reference'],
-                        'height' => $photo['height'] ?? 0,
-                        'width' => $photo['width'] ?? 0,
-                        'html_attributions' => $photo['html_attributions'] ?? []
-                    ];
-                })
-                ->values()
-                ->all();
-
-            Cache::put($cacheKey, $photoReferences, now()->addDay());
-
-            return $photoReferences;
-        } catch (\Exception $e) {
-            Log::error('Error fetching additional photos', [
-                'place_id' => $placeId,
-                'error' => $e->getMessage()
-            ]);
-
+        if (!isset($details['result']['photos']) || empty($details['result']['photos'])) {
+            // Log missing photos and return empty array
+            Log::info('No photos found for place', ['place_id' => $placeId]);
+            Cache::put($cacheKey, [], now()->addHour()); // Cache empty result for shorter time
             return [];
         }
+
+        $photoReferences = collect($details['result']['photos'])
+            ->take(self::FULL_PHOTO_COUNT)
+            ->map(function ($photo) {
+                return [
+                    'photo_reference' => $photo['photo_reference'],
+                    'height' => $photo['height'] ?? 0,
+                    'width' => $photo['width'] ?? 0,
+                    'html_attributions' => $photo['html_attributions'] ?? []
+                ];
+            })
+            ->values()
+            ->all();
+
+        Cache::put($cacheKey, $photoReferences, now()->addDay());
+        return $photoReferences;
+    } catch (\Exception $e) {
+        Log::error('Error fetching additional photos', [
+            'place_id' => $placeId,
+            'error' => $e->getMessage()
+        ]);
+        return [];
     }
+}
 
     private function fetchPage(string $lat, string $lng, ?string $pageToken = null): array
     {
