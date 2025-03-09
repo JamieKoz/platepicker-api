@@ -4,22 +4,46 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Services\RecipeService;
+use App\Services\UserMealService;
 use App\Services\TallyService;
 use App\Services\UserService;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class RecipeController extends Controller
+class UserMealController extends Controller
 {
-    protected $recipeService;
+    protected $userMealService;
     protected $userService;
     protected $tallyService;
+    protected $apiKey;
+    protected $clerkUrl;
 
-    public function __construct(RecipeService $recipeService, UserService $userService, TallyService $tallyService)
+    public function __construct(UserMealService $userMealService, UserService $userService, TallyService $tallyService)
     {
-        $this->recipeService = $recipeService;
+        $this->userMealService = $userMealService;
         $this->userService = $userService;
         $this->tallyService = $tallyService;
+
+
+        $this->apiKey = env('CLERK_API_KEY');
+        $this->clerkUrl = env('CLERK_API_URL', 'https://api.clerk.com/v1');
+    }
+
+    public function validateUserExistsWithClerk($userId): bool
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->get($this->clerkUrl . '/users/' . $userId . '/organization_memberships');
+
+        if ($response->successful()) {
+            $data = $response->json();
+            if (!empty($data['data'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getRecipe(Request $request)
@@ -27,11 +51,15 @@ class RecipeController extends Controller
         $userId = $request->header('X-User-ID');
 
         if (!empty($userId)) {
-            $recipes = $this->recipeService->getRandomRecipesActive(27, $userId);
+            if(!$this->validateUserExistsWithClerk($userId)){
+                return response()->json(['error' => 'Unauthorized.'], 500);
+            }
+
+            $recipes = $this->userMealService->getRandomRecipesActive(27, $userId);
             return response()->json($recipes, 200);
         }
 
-        $recipes = $this->recipeService->getRandomRecipesUnauthorized(27);
+        $recipes = $this->userMealService->getRandomRecipesUnauthorized(27);
 
         return response()->json($recipes, 200, [
             'Access-Control-Allow-Origin' => '*',
@@ -45,10 +73,15 @@ class RecipeController extends Controller
         if (!$userId) {
             return response()->json(['error' => 'User ID required'], 400);
         }
+
+        if(!$this->validateUserExistsWithClerk($userId)){
+            return response()->json(['error' => 'Unauthorized.'], 500);
+        }
+
         $searchTerm = $request->query('q');
         $activeDirection = $request->query('active_direction', 'desc');
         $titleDirection = $request->query('title_direction', 'asc');
-        $recipes = $this->recipeService->search($searchTerm, $userId, $activeDirection, $titleDirection);
+        $recipes = $this->userMealService->search($searchTerm, $userId, $activeDirection, $titleDirection);
         return response()->json($recipes);
     }
 
@@ -60,9 +93,13 @@ class RecipeController extends Controller
                 return response()->json(['error' => 'User ID required'], 400);
             }
 
+            if(!$this->validateUserExistsWithClerk($userId)){
+                return response()->json(['error' => 'Unauthorized.'], 500);
+            }
+
             $activeDirection = $request->query('active_direction', 'desc');
             $titleDirection = $request->query('title_direction', 'asc');
-            $list = $this->recipeService->getRecipeList($userId, $activeDirection, $titleDirection);
+            $list = $this->userMealService->getRecipeList($userId, $activeDirection, $titleDirection);
             return response()->json($list);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -73,10 +110,14 @@ class RecipeController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $authId = $request->header('X-User-ID');
+            $userId = $request->header('X-User-ID');
 
-            if (!$authId) {
+            if (!$userId) {
                 return response()->json(['error' => 'User ID required'], 400);
+            }
+
+            if(!$this->validateUserExistsWithClerk($userId)){
+                return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
             $validated = $request->validate([
@@ -90,7 +131,7 @@ class RecipeController extends Controller
                 'active' => 'nullable|boolean'
             ]);
 
-            $recipe = $this->recipeService->createRecipe($validated, $authId);
+            $recipe = $this->userMealService->createRecipe($validated, $userId);
             return response()->json($recipe, 201);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -116,7 +157,7 @@ class RecipeController extends Controller
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);
-            $recipe = $this->recipeService->updateRecipe($id, $validated, $authId);
+            $recipe = $this->userMealService->updateRecipe($id, $validated, $authId);
             return response()->json($recipe);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -132,26 +173,14 @@ class RecipeController extends Controller
             return response()->json(['error' => 'User ID required'], 400);
         }
         try {
-            $this->recipeService->toggleStatus($authId, $id);
+            $this->userMealService->toggleStatus($authId, $id);
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to toggle status'], 500);
         }
     }
 
-    public function getRecipes(Request $request): JsonResponse
-    {
-        try {
-            $searchTerm = $request->query('q');
-            $titleDirection = $request->query('title_direction', 'asc');
 
-            $recipes = $this->recipeService->getRecipes($searchTerm, $titleDirection);
-            return response()->json($recipes);
-        } catch (\Exception $e) {
-            Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to fetch recipes'], 500);
-        }
-    }
 
     public function addFromRecipe(Request $request, $id): JsonResponse
     {
@@ -161,7 +190,7 @@ class RecipeController extends Controller
                 return response()->json(['error' => 'User ID required'], 400);
             }
 
-            $userMeal = $this->recipeService->addFromRecipe($authId, $id);
+            $userMeal = $this->userMealService->addFromRecipe($authId, $id);
             return response()->json($userMeal, 201);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -177,7 +206,7 @@ class RecipeController extends Controller
                 return response()->json(['error' => 'User ID required'], 400);
             }
 
-            $this->recipeService->deleteMeal($authId, $id);
+            $this->userMealService->deleteMeal($authId, $id);
             return response()->json(['message' => 'Meal deleted successfully']);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -185,20 +214,4 @@ class RecipeController extends Controller
         }
     }
 
-    public function incrementTally(Request $request, $id): JsonResponse
-    {
-        try {
-            $authId = $request->header('X-User-ID');
-            if (!$authId) {
-                return response()->json(['error' => 'User ID required'], 200);
-            }
-
-            $this->tallyService->incrementMealTally($authId, $id);
-            return response()->json(['message' => 'Tally incremented successfully']);
-        } catch (\Exception $e) {
-            return response()->json(['error' =>$e->getMessage()], 500);
-            Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to increment tally'], 500);
-        }
-    }
 }

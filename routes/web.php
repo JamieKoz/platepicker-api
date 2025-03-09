@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MealController;
-use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\UserMealController;
 use Fruitcake\Cors\HandleCors;
 
 /*

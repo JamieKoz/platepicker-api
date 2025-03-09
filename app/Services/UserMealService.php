@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-class RecipeService
+class UserMealService
 {
     public function getRandomRecipesUnauthorized($count = 27): Collection
     {
@@ -167,16 +167,6 @@ class RecipeService
             ->paginate(10);
     }
 
-    public function getRecipes($searchTerm = null, string $titleDirection = 'asc'): LengthAwarePaginator
-    {
-        $query = Recipe::query();
-
-        if ($searchTerm) {
-            $query->where('title', 'LIKE', '%' . $searchTerm . '%');
-        }
-
-        return $query->orderBy('title', $titleDirection)->paginate(50);
-    }
 
     public function addFromRecipe(string $authId, int $recipeId): UserMeal
     {
