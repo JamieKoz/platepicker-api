@@ -127,6 +127,8 @@ class UserMealController extends Controller
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
                 'dietary' => 'nullable|string',
+                'cuisine' => 'nullable|string',
+                'category' => 'nullable|string',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);
@@ -153,6 +155,8 @@ class UserMealController extends Controller
                 'instructions' => 'nullable|string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
+                'cuisine' => 'nullable|string',
+                'category' => 'nullable|string',
                 'dietary' => 'nullable|string',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'

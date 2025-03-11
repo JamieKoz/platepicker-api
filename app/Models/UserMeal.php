@@ -22,6 +22,8 @@ class UserMeal extends Model
         'cleaned_ingredients',
         'serves',
         'cooking_time',
+        'cuisine',
+        'category',
         'dietary',
     ];
 

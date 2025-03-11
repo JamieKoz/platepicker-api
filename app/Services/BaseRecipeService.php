@@ -31,6 +31,8 @@ class BaseRecipeService
                 'cooking_time' => $recipe->cooking_time,
                 'serves' => $recipe->serves,
                 'dietary' => $recipe->dietary,
+                'cuisine' => $recipe->cuisine,
+                'category' => $recipe->category,
                 'cleaned_ingredients' => $recipe->cleaned_ingredients
             ]);
         }
@@ -46,6 +48,8 @@ class BaseRecipeService
         $recipe->cooking_time = $data['cooking_time'];
         $recipe->serves = $data['serves'];
         $recipe->dietary = $data['dietary'];
+        $recipe->cuisine = $data['cuisine'];
+        $recipe->category = $data['category'];
         $recipe->active = true;
 
         if (isset($data['image'])) {
@@ -74,6 +78,8 @@ class BaseRecipeService
             'cleaned_ingredients' => $data['ingredients'] ?? $recipe->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $recipe->cooking_time,
             'serves' => $data['serves'] ?? $recipe->serves,
+            'cuisine' => $data['cuisine'] ?? $recipe->cuisine,
+            'category' => $data['category'] ?? $recipe->category,
             'dietary' => $data['dietary'] ?? $recipe->dietary,
         ]);
 

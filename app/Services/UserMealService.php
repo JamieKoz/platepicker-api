@@ -43,31 +43,6 @@ class UserMealService
         return $recipes;
     }
 
-    public function assignInitialMealsToUser(UserMeal $userMeal): void
-    {
-        // Get 30 random active recipes
-        $defaultRecipes = Recipe::where('active', 1)
-            ->inRandomOrder()
-            ->take(30)
-            ->get();
-
-        foreach ($defaultRecipes as $recipe) {
-            UserMeal::create([
-                'user_id' => $userMeal->id,
-                'recipe_id' => $recipe->id,
-                'active' => true,
-                'title' => $recipe->title,
-                'ingredients' => $recipe->ingredients,
-                'instructions' => $recipe->instructions,
-                'image_name' => $recipe->image_name,
-                'cooking_time' => $recipe->cooking_time,
-                'serves' => $recipe->serves,
-                'dietary' => $recipe->dietary,
-                'cleaned_ingredients' => $recipe->cleaned_ingredients
-            ]);
-        }
-    }
-
     public function createRecipe(array $data, string $authId): UserMeal
     {
         $userMeal = new UserMeal();
@@ -78,6 +53,8 @@ class UserMealService
         $userMeal->cleaned_ingredients = $data['ingredients'];
         $userMeal->cooking_time = $data['cooking_time'];
         $userMeal->serves = $data['serves'];
+        $userMeal->cuisine = $data['cuisine'];
+        $userMeal->category = $data['category'];
         $userMeal->dietary = $data['dietary'];
         $userMeal->active = true;
 
@@ -108,6 +85,8 @@ class UserMealService
             'cleaned_ingredients' => $data['ingredients'] ?? $userMeal->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $userMeal->cooking_time,
             'serves' => $data['serves'] ?? $userMeal->serves,
+            'cuisine' => $data['cuisine'] ?? $userMeal->cuisine,
+            'category' => $data['category'] ?? $userMeal->category,
             'dietary' => $data['dietary'] ?? $userMeal->dietary,
         ]);
 
@@ -167,6 +146,8 @@ class UserMealService
             'cleaned_ingredients' => $recipe->cleaned_ingredients,
             'cooking_time' => $recipe->cooking_time,
             'serves' => $recipe->serves,
+            'cuisine' => $recipe->cuisine,
+            'category' => $recipe->category,
             'dietary' => $recipe->dietary,
             'active' => true
         ]);

@@ -49,11 +49,4 @@ class User extends Authenticatable
             ->withPivot('active')
             ->withTimestamps();
     }
-
-    protected static function booted() {
-        static::created(function ($user) {
-        $recipeService = app(RecipeService::class);
-            $recipeService->assignInitialMealsToUser($user);
-        });
-    }
 }

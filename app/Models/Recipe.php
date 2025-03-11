@@ -23,13 +23,16 @@ class Recipe extends Model
      */
     protected $fillable = [
         'title',
-        'instructions',
         'ingredients',
+        'instructions',
         'image_name',
         'cleaned_ingredients',
         'serves',
-        'dietary',
         'cooking_time',
+        'cuisine',
+        'category',
+        'dietary',
+        'active',
     ];
 
     /**
