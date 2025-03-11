@@ -125,7 +125,7 @@ class RestaurantController extends Controller
         // Convert photo references to URLs with optimized sizes
         $photoUrls = collect($photos)->map(function ($photo) {
             return [
-                'url' => $this->getPhotoUrl($photo['photo_reference'], 400, 300), // Smaller size
+                'url' => $this->getPhotoUrl($photo['photo_reference'], 400, 400), // Smaller size
                 'width' => $photo['width'] ?? 400,
                 'height' => $photo['height'] ?? 300,
                 'photo_reference' => $photo['photo_reference'] ?? '',
@@ -145,7 +145,7 @@ class RestaurantController extends Controller
     /**
      * Build a photo URL from a photo reference
      */
-    private function getPhotoUrl(string $photoReference, int $maxWidth = 800, int $maxHeight = 350): string
+    private function getPhotoUrl(string $photoReference, int $maxWidth = 450, int $maxHeight = 450): string
     {
         if (strpos($photoReference, 'maps.googleapis.com/maps/api/place/photo') !== false) {
             // Extract the actual photo reference from the URL
@@ -167,7 +167,7 @@ class RestaurantController extends Controller
     public function getPhotoProxy(Request $request)
     {
         $photoReference = $request->query('photo_reference');
-        $maxWidth = $request->query('maxwidth', 800);
+        $maxWidth = $request->query('maxwidth', 450);
         $maxHeight = $request->query('maxheight', 350);
 
         if (!$photoReference) {

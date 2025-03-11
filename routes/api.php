@@ -49,3 +49,4 @@ Route::get('/recipes/list', [BaseRecipeController::class, 'getList']);
 Route::get('/recipes/search', [BaseRecipeController::class, 'search']);
 Route::post('/recipes', [BaseRecipeController::class, 'store']);
 Route::post('/recipes/{id}', [BaseRecipeController::class, 'update']);
+Route::post('/users/assign-initial-recipes', [BaseRecipeController::class, 'assignInitialMealsToUser']);

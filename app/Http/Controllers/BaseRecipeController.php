@@ -27,6 +27,17 @@ class BaseRecipeController extends Controller
         $this->clerkUrl = env('CLERK_API_URL', 'https://api.clerk.com/v1');
     }
 
+    public function assignInitialMealsToUser(Request $request)
+    {
+        if (empty($request->header('X-User-ID'))) {
+            return response()->json(['error' => 'Unauthorized.'], 500);
+        }
+
+        $userId = $request->header('X-User-ID');
+        $this->baseRecipeService->assignInitialMealsToUser($userId);
+        return response()->json(['success' => 'Assigned Recipes to new user.'], 200);
+    }
+
     public function validateIsAdminWithClerk($userId): bool
     {
         $response = Http::withHeaders([

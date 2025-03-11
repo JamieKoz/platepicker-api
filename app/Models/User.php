@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Services\RecipeService;
+use App\Services\UserMealService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;

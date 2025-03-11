@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 class BaseRecipeService
 {
-    public function assignInitialMealsToUser(User $user): void
+    public function assignInitialMealsToUser(string $userId): void
     {
         // Get 30 random active recipes
         $defaultRecipes = Recipe::where('active', 1)
@@ -21,7 +21,7 @@ class BaseRecipeService
 
         foreach ($defaultRecipes as $recipe) {
             UserMeal::create([
-                'user_id' => $user->id,
+                'user_id' => $userId,
                 'recipe_id' => $recipe->id,
                 'active' => true,
                 'title' => $recipe->title,
@@ -113,27 +113,6 @@ class BaseRecipeService
             ->orderBy('title', $titleDirection)
             ->paginate(10);
     }
-
-
-    /* public function addFromRecipe(string $authId, int $recipeId): UserMeal */
-    /* { */
-    /*     $user = User::where('auth_id', $authId)->firstOrFail(); */
-    /*     $recipe = Recipe::findOrFail($recipeId); */
-    /**/
-    /*     return UserMeal::create([ */
-    /*         'user_id' => $user->id, */
-    /*         'recipe_id' => $recipe->id, */
-    /*         'title' => $recipe->title, */
-    /*         'ingredients' => $recipe->ingredients, */
-    /*         'instructions' => $recipe->instructions, */
-    /*         'image_name' => $recipe->image_name, */
-    /*         'cleaned_ingredients' => $recipe->cleaned_ingredients, */
-    /*         'cooking_time' => $recipe->cooking_time, */
-    /*         'serves' => $recipe->serves, */
-    /*         'dietary' => $recipe->dietary, */
-    /*         'active' => true */
-    /*     ]); */
-    /* } */
 
     public function deleteMeal(int $mealId): void
     {

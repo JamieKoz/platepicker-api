@@ -27,15 +27,13 @@ class UserMealService
         return $recipes;
     }
 
-    public function getRandomRecipesActive($count = 27, $userId): Collection
+    public function getRandomRecipesActive($count = 27, $authId): Collection
     {
-        $user = User::where('auth_id', $userId)->firstOrFail();
-
         $recipes = UserMeal::with('recipe')
             ->select('user_meals.*')
             ->inRandomOrder()
             ->where('user_meals.active', 1)
-            ->where('user_meals.user_id', $user->id)
+            ->where('user_meals.user_id', $authId)
             ->take($count)
             ->get();
 
@@ -45,7 +43,7 @@ class UserMealService
         return $recipes;
     }
 
-    public function assignInitialMealsToUser(User $user): void
+    public function assignInitialMealsToUser(UserMeal $userMeal): void
     {
         // Get 30 random active recipes
         $defaultRecipes = Recipe::where('active', 1)
@@ -55,7 +53,7 @@ class UserMealService
 
         foreach ($defaultRecipes as $recipe) {
             UserMeal::create([
-                'user_id' => $user->id,
+                'user_id' => $userMeal->id,
                 'recipe_id' => $recipe->id,
                 'active' => true,
                 'title' => $recipe->title,
@@ -72,10 +70,8 @@ class UserMealService
 
     public function createRecipe(array $data, string $authId): UserMeal
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
-
         $userMeal = new UserMeal();
-        $userMeal->user_id = $user->id;
+        $userMeal->user_id = $authId;
         $userMeal->title = $data['title'];
         $userMeal->ingredients = $data['ingredients'];
         $userMeal->instructions = $data['instructions'];
@@ -98,16 +94,11 @@ class UserMealService
 
     public function updateRecipe(int $id, array $data, string $authId): UserMeal
     {
-        $user = User::where('auth_id', $authId)->first();
-        if (!$user) {
-            Log::error('User not found', ['auth_id' => $authId]);
-            throw new \Exception('User not found');
-        }
         $userMeal = UserMeal::where('id', $id)
-            ->where('user_id', $user->id)
+            ->where('user_id', $authId)
             ->firstOrFail();
         if (!$userMeal) {
-            Log::error('Meal not found', ['meal_id' => $id, 'user_id' => $user->id]);
+            Log::error('Meal not found', ['meal_id' => $id, 'user_id' => $authId]);
             throw new \Exception('Meal not found');
         }
         $userMeal->fill([
@@ -136,9 +127,7 @@ class UserMealService
 
     public function toggleStatus(string $authId, $mealId): void
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
-
-        $userMeal = UserMeal::where('user_id', $user->id)
+        $userMeal = UserMeal::where('user_id', $authId)
             ->where('id', $mealId)
             ->firstOrFail();
 
@@ -148,9 +137,7 @@ class UserMealService
 
     public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
-
-        return UserMeal::where('user_id', $user->id)
+        return UserMeal::where('user_id', $authId)
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(50);
@@ -158,9 +145,7 @@ class UserMealService
 
     public function search($searchTerm, string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
-
-        return UserMeal::where('user_id', $user->id)
+        return UserMeal::where('user_id', $authId)
             ->where('title', 'LIKE', '%' . $searchTerm . '%')
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
@@ -170,11 +155,10 @@ class UserMealService
 
     public function addFromRecipe(string $authId, int $recipeId): UserMeal
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
         $recipe = Recipe::findOrFail($recipeId);
 
         return UserMeal::create([
-            'user_id' => $user->id,
+            'user_id' => $authId,
             'recipe_id' => $recipe->id,
             'title' => $recipe->title,
             'ingredients' => $recipe->ingredients,
@@ -190,10 +174,8 @@ class UserMealService
 
     public function deleteMeal(string $authId, int $mealId): void
     {
-        $user = User::where('auth_id', $authId)->firstOrFail();
-
         UserMeal::where('id', $mealId)
-            ->where('user_id', $user->id)
+            ->where('user_id', $authId)
             ->firstOrFail()
             ->delete();
     }
