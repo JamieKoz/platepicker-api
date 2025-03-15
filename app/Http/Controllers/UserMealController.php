@@ -24,7 +24,6 @@ class UserMealController extends Controller
         $this->userService = $userService;
         $this->tallyService = $tallyService;
 
-
         $this->apiKey = env('CLERK_API_KEY');
         $this->clerkUrl = env('CLERK_API_URL', 'https://api.clerk.com/v1');
     }
@@ -50,16 +49,35 @@ class UserMealController extends Controller
     {
         $userId = $request->header('X-User-ID');
 
+        // Extract filter parameters
+        $categoryFilter = $request->query('categories');
+        $cuisineFilter = $request->query('cuisines');
+        $dietaryFilter = $request->query('dietary');
+
         if (!empty($userId)) {
-            if(!$this->validateUserExistsWithClerk($userId)){
+            if (!$this->validateUserExistsWithClerk($userId)) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
-            $recipes = $this->userMealService->getRandomRecipesActive(27, $userId);
+            // Pass filter parameters to service method
+            $recipes = $this->userMealService->getRandomRecipesActive(
+                27,
+                $userId,
+                $categoryFilter,
+                $cuisineFilter,
+                $dietaryFilter
+            );
+
             return response()->json($recipes, 200);
         }
 
-        $recipes = $this->userMealService->getRandomRecipesUnauthorized(27);
+        // For unauthorized users, also support filtering
+        $recipes = $this->userMealService->getRandomRecipesUnauthorized(
+            27,
+            $categoryFilter,
+            $cuisineFilter,
+            $dietaryFilter
+        );
 
         return response()->json($recipes, 200, [
             'Access-Control-Allow-Origin' => '*',
@@ -103,7 +121,7 @@ class UserMealController extends Controller
             return response()->json($list);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to fetch recipes'], 500);
+            return response()->json(['error' =>$e->getMessage()], 500);
         }
     }
 
@@ -126,9 +144,12 @@ class UserMealController extends Controller
                 'instructions' => 'string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
-                'dietary' => 'nullable|string',
-                'cuisine' => 'nullable|string',
-                'category' => 'nullable|string',
+                'categories' => 'nullable|array',
+                'categories.*' => 'exists:categories,id',
+                'cuisines' => 'nullable|array',
+                'cuisines.*' => 'exists:cuisines,id',
+                'dietary' => 'nullable|array',
+                'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);
@@ -155,23 +176,26 @@ class UserMealController extends Controller
                 'instructions' => 'nullable|string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
-                'cuisine' => 'nullable|string',
-                'category' => 'nullable|string',
-                'dietary' => 'nullable|string',
+                'categories' => 'nullable|array',
+                'categories.*' => 'exists:categories,id',
+                'cuisines' => 'nullable|array',
+                'cuisines.*' => 'exists:cuisines,id',
+                'dietary' => 'nullable|array',
+                'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);
+
             $recipe = $this->userMealService->updateRecipe($id, $validated, $authId);
             return response()->json($recipe);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error($e->getMessage());
             return response()->json(['error' => 'Failed to update recipe'], 500);
         }
     }
 
     public function toggleStatus(Request $request, $id): JsonResponse
     {
-
         $authId = $request->header('X-User-ID');
         if (!$authId) {
             return response()->json(['error' => 'User ID required'], 400);
@@ -183,8 +207,6 @@ class UserMealController extends Controller
             return response()->json(['error' => 'Failed to toggle status'], 500);
         }
     }
-
-
 
     public function addFromRecipe(Request $request, $id): JsonResponse
     {
@@ -217,5 +239,4 @@ class UserMealController extends Controller
             return response()->json(['error' => 'Failed to delete meal'], 500);
         }
     }
-
 }

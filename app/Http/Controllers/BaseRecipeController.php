@@ -80,35 +80,6 @@ class BaseRecipeController extends Controller
             return response()->json($list);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to fetch recipes'], 500);
-        }
-    }
-
-    public function store(Request $request): JsonResponse
-    {
-        try {
-            if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
-            }
-
-            $validated = $request->validate([
-                'title' => 'required|string|max:255',
-                'ingredients' => 'string',
-                'instructions' => 'string',
-                'cooking_time' => 'nullable|string',
-                'serves' => 'nullable|string',
-                'dietary' => 'nullable|string',
-                'cuisine' => 'nullable|string',
-                'category' => 'nullable|string',
-                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'active' => 'nullable|boolean'
-            ]);
-
-            $recipe = $this->baseRecipeService->createRecipe($validated);
-            return response()->json($recipe, 201);
-        } catch (\Exception $e) {
-            Log::error($e->getMessage());
-
             return response()->json(['error' => 'Failed to create recipe'], 500);
         }
     }
@@ -126,9 +97,12 @@ class BaseRecipeController extends Controller
                 'instructions' => 'nullable|string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
-                'dietary' => 'nullable|string',
-                'cuisine' => 'nullable|string',
-                'category' => 'nullable|string',
+                'categories' => 'nullable|array',
+                'categories.*' => 'exists:categories,id',
+                'cuisines' => 'nullable|array',
+                'cuisines.*' => 'exists:cuisines,id',
+                'dietary' => 'nullable|array',
+                'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean'
             ]);
@@ -169,7 +143,7 @@ class BaseRecipeController extends Controller
         }
     }
 
-    public function getRecipes(Request $request): JsonResponse
+     public function getRecipes(Request $request): JsonResponse
     {
         try {
             if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
@@ -178,8 +152,17 @@ class BaseRecipeController extends Controller
 
             $searchTerm = $request->query('q');
             $titleDirection = $request->query('title_direction', 'asc');
+            $categoryFilter = $request->query('category');
+            $cuisineFilter = $request->query('cuisine');
+            $dietaryFilter = $request->query('dietary');
 
-            $recipes = $this->baseRecipeService->getRecipes($searchTerm, $titleDirection);
+            $recipes = $this->baseRecipeService->getRecipes(
+                $searchTerm,
+                $titleDirection,
+                $categoryFilter,
+                $cuisineFilter,
+                $dietaryFilter
+            );
             return response()->json($recipes);
         } catch (\Exception $e) {
             Log::error($e->getMessage());

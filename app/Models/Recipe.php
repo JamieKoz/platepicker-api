@@ -29,9 +29,9 @@ class Recipe extends Model
         'cleaned_ingredients',
         'serves',
         'cooking_time',
-        'cuisine',
-        'category',
-        'dietary',
+        /* 'cuisine', */
+        /* 'category', */
+        /* 'dietary', */
         'active',
     ];
 
@@ -50,5 +50,29 @@ class Recipe extends Model
         return $this->belongsToMany(User::class, 'user_meals')
             ->withPivot('active')
             ->withTimestamps();
+    }
+
+   /**
+     * Get the categories for this recipe.
+     */
+    public function categories()
+    {
+        return $this->belongsToMany(Category::class, 'recipe_categories');
+    }
+
+    /**
+     * Get the cuisines for this recipe.
+     */
+    public function cuisines()
+    {
+        return $this->belongsToMany(Cuisine::class, 'recipes_cuisine');
+    }
+
+    /**
+     * Get the dietary requirements for this recipe.
+     */
+    public function dietary()
+    {
+        return $this->belongsToMany(Dietary::class, 'recipes_dietary', 'recipe_id', 'dietary_id');
     }
 }

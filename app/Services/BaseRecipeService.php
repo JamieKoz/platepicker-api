@@ -5,9 +5,13 @@ namespace App\Services;
 use App\Models\Recipe;
 use App\Models\User;
 use App\Models\UserMeal;
+use App\Models\Category;
+use App\Models\Cuisine;
+use App\Models\Dietary;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class BaseRecipeService
 {
@@ -20,6 +24,11 @@ class BaseRecipeService
             ->get();
 
         foreach ($defaultRecipes as $recipe) {
+            // Get related data
+            $categoryNames = $recipe->categories()->pluck('name')->implode(', ');
+            $cuisineNames = $recipe->cuisines()->pluck('name')->implode(', ');
+            $dietaryNames = $recipe->dietary()->pluck('name')->implode(', ');
+
             UserMeal::create([
                 'user_id' => $userId,
                 'recipe_id' => $recipe->id,
@@ -30,9 +39,9 @@ class BaseRecipeService
                 'image_name' => $recipe->image_name,
                 'cooking_time' => $recipe->cooking_time,
                 'serves' => $recipe->serves,
-                'dietary' => $recipe->dietary,
-                'cuisine' => $recipe->cuisine,
-                'category' => $recipe->category,
+                'dietary' => $dietaryNames,
+                'cuisine' => $cuisineNames,
+                'category' => $categoryNames,
                 'cleaned_ingredients' => $recipe->cleaned_ingredients
             ]);
         }
@@ -47,9 +56,6 @@ class BaseRecipeService
         $recipe->cleaned_ingredients = $data['ingredients'];
         $recipe->cooking_time = $data['cooking_time'];
         $recipe->serves = $data['serves'];
-        $recipe->dietary = $data['dietary'];
-        $recipe->cuisine = $data['cuisine'];
-        $recipe->category = $data['category'];
         $recipe->active = true;
 
         if (isset($data['image'])) {
@@ -60,7 +66,21 @@ class BaseRecipeService
         }
 
         $recipe->save();
-        return $recipe;
+
+        // Attach relationships
+        if (isset($data['categories']) && is_array($data['categories'])) {
+            $recipe->categories()->attach($data['categories']);
+        }
+
+        if (isset($data['cuisines']) && is_array($data['cuisines'])) {
+            $recipe->cuisines()->attach($data['cuisines']);
+        }
+
+        if (isset($data['dietary']) && is_array($data['dietary'])) {
+            $recipe->dietary()->attach($data['dietary']);
+        }
+
+        return $recipe->fresh(['categories', 'cuisines', 'dietary']);
     }
 
     public function updateRecipe(int $id, array $data): Recipe
@@ -68,9 +88,10 @@ class BaseRecipeService
         $recipe = Recipe::where('id', $id)->firstOrFail();
 
         if (!$recipe) {
-            Log::error('Meal not found', ['meal_id' => $id ]);
+            Log::error('Meal not found', ['meal_id' => $id]);
             throw new \Exception('Meal not found');
         }
+
         $recipe->fill([
             'title' => $data['title'],
             'ingredients' => $data['ingredients'] ?? $recipe->ingredients,
@@ -78,9 +99,6 @@ class BaseRecipeService
             'cleaned_ingredients' => $data['ingredients'] ?? $recipe->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $recipe->cooking_time,
             'serves' => $data['serves'] ?? $recipe->serves,
-            'cuisine' => $data['cuisine'] ?? $recipe->cuisine,
-            'category' => $data['category'] ?? $recipe->category,
-            'dietary' => $data['dietary'] ?? $recipe->dietary,
         ]);
 
         if (isset($data['image'])) {
@@ -94,7 +112,21 @@ class BaseRecipeService
         }
 
         $recipe->save();
-        return $recipe;
+
+        // Update relationships
+        if (isset($data['categories'])) {
+            $recipe->categories()->sync($data['categories']);
+        }
+
+        if (isset($data['cuisines'])) {
+            $recipe->cuisines()->sync($data['cuisines']);
+        }
+
+        if (isset($data['dietary'])) {
+            $recipe->dietary()->sync($data['dietary']);
+        }
+
+        return $recipe->fresh(['categories', 'cuisines', 'dietary']);
     }
 
     public function toggleStatus($mealId): void
@@ -107,7 +139,8 @@ class BaseRecipeService
 
     public function getRecipeList(string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return Recipe::orderBy('active', $activeDirection)
+        return Recipe::with(['categories', 'cuisines', 'dietary'])
+            ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(50);
     }
@@ -115,6 +148,7 @@ class BaseRecipeService
     public function search($searchTerm, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
         return Recipe::where('title', 'LIKE', '%' . $searchTerm . '%')
+            ->with(['categories', 'cuisines', 'dietary'])
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(10);
@@ -122,22 +156,54 @@ class BaseRecipeService
 
     public function deleteMeal(int $mealId): void
     {
-        Recipe::where('id', $mealId)
-            ->firstOrFail()
-            ->delete();
+        $recipe = Recipe::where('id', $mealId)->firstOrFail();
+
+        // The relationships will be automatically deleted due to onDelete('cascade')
+        // in the migration files
+        $recipe->delete();
     }
 
-    public function getRecipes($searchTerm = null, string $titleDirection = 'asc'): LengthAwarePaginator
+    public function getRecipes($searchTerm = null, string $titleDirection = 'asc', $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): LengthAwarePaginator
     {
-        $query = Recipe::query();
+        $query = Recipe::query()->with(['categories', 'cuisines', 'dietary']);
 
         if ($searchTerm) {
             $query->where('title', 'LIKE', '%' . $searchTerm . '%');
         }
 
+        // Filter by category if provided
+        if ($categoryFilter) {
+            $query->whereHas('categories', function($q) use ($categoryFilter) {
+                if (is_numeric($categoryFilter)) {
+                    $q->where('categories.id', $categoryFilter);
+                } else {
+                    $q->where('categories.name', 'LIKE', '%' . $categoryFilter . '%');
+                }
+            });
+        }
+
+        // Filter by cuisine if provided
+        if ($cuisineFilter) {
+            $query->whereHas('cuisines', function($q) use ($cuisineFilter) {
+                if (is_numeric($cuisineFilter)) {
+                    $q->where('cuisines.id', $cuisineFilter);
+                } else {
+                    $q->where('cuisines.name', 'LIKE', '%' . $cuisineFilter . '%');
+                }
+            });
+        }
+
+        // Filter by dietary if provided
+        if ($dietaryFilter) {
+            $query->whereHas('dietary', function($q) use ($dietaryFilter) {
+                if (is_numeric($dietaryFilter)) {
+                    $q->where('dietary.id', $dietaryFilter);
+                } else {
+                    $q->where('dietary.name', 'LIKE', '%' . $dietaryFilter . '%');
+                }
+            });
+        }
+
         return $query->orderBy('title', $titleDirection)->paginate(50);
     }
 }
-
-
-

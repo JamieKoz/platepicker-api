@@ -6,6 +6,9 @@ use App\Models\Recipe;
 use App\Models\User;
 use App\Models\UserMeal;
 use App\Models\UserMealTally;
+use App\Models\Category;
+use App\Models\Cuisine;
+use App\Models\Dietary;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -13,33 +16,82 @@ use Illuminate\Support\Facades\Storage;
 
 class UserMealService
 {
-    public function getRandomRecipesUnauthorized($count = 27): Collection
+    public function getRandomRecipesUnauthorized($count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): Collection
     {
-        $recipes = Recipe::query()
-            ->inRandomOrder()
-            ->where('active', 1)
-            ->take($count)
-            ->get();
+        $query = Recipe::query()
+            ->with(['categories', 'cuisines', 'dietary'])
+            ->where('active', 1);
+
+        // Apply category filter if provided
+        if ($categoryFilter) {
+            $categoryIds = explode(',', $categoryFilter);
+            $query->whereHas('categories', function ($q) use ($categoryIds) {
+                $q->whereIn('categories.id', $categoryIds);
+            });
+        }
+
+        // Apply cuisine filter if provided
+        if ($cuisineFilter) {
+            $cuisineIds = explode(',', $cuisineFilter);
+            $query->whereHas('cuisines', function ($q) use ($cuisineIds) {
+                $q->whereIn('cuisines.id', $cuisineIds);
+            });
+        }
+
+        // Apply dietary filter if provided
+        if ($dietaryFilter) {
+            $dietaryIds = explode(',', $dietaryFilter);
+            $query->whereHas('dietary', function ($q) use ($dietaryIds) {
+                $q->whereIn('dietary.id', $dietaryIds);
+            });
+        }
+
+        $recipes = $query->inRandomOrder()->take($count)->get();
 
         foreach ($recipes as $recipe) {
             $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
         }
+
         return $recipes;
     }
 
-    public function getRandomRecipesActive($count = 27, $authId): Collection
+    public function getRandomRecipesActive($count = 27, $authId, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): Collection
     {
-        $recipes = UserMeal::with('recipe')
-            ->select('user_meals.*')
-            ->inRandomOrder()
-            ->where('user_meals.active', 1)
-            ->where('user_meals.user_id', $authId)
-            ->take($count)
-            ->get();
+        $query = UserMeal::with(['categories', 'cuisines', 'dietary', 'recipe'])
+        ->select('user_meals.*')
+        ->where('user_meals.active', 1)
+        ->where('user_meals.user_id', $authId);
+
+        // Apply category filter if provided
+        if ($categoryFilter) {
+            $categoryIds = explode(',', $categoryFilter);
+            $query->whereHas('categories', function ($q) use ($categoryIds) {
+                $q->whereIn('categories.id', $categoryIds);
+            });
+        }
+
+        // Apply cuisine filter if provided
+        if ($cuisineFilter) {
+            $cuisineIds = explode(',', $cuisineFilter);
+            $query->whereHas('cuisines', function ($q) use ($cuisineIds) {
+                $q->whereIn('cuisines.id', $cuisineIds);
+            });
+        }
+
+        // Apply dietary filter if provided
+        if ($dietaryFilter) {
+            $dietaryIds = explode(',', $dietaryFilter);
+            $query->whereHas('dietary', function ($q) use ($dietaryIds) {
+                $q->whereIn('dietary.id', $dietaryIds);
+            });
+        }
+
+        $recipes = $query->inRandomOrder()->take($count)->get();
 
         foreach ($recipes as $recipe) {
             $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
         }
+
         return $recipes;
     }
 
@@ -53,9 +105,6 @@ class UserMealService
         $userMeal->cleaned_ingredients = $data['ingredients'];
         $userMeal->cooking_time = $data['cooking_time'];
         $userMeal->serves = $data['serves'];
-        $userMeal->cuisine = $data['cuisine'];
-        $userMeal->category = $data['category'];
-        $userMeal->dietary = $data['dietary'];
         $userMeal->active = true;
 
         if (isset($data['image'])) {
@@ -66,7 +115,21 @@ class UserMealService
         }
 
         $userMeal->save();
-        return $userMeal;
+
+        // Attach relationships
+        if (isset($data['categories']) && is_array($data['categories'])) {
+            $userMeal->categories()->attach($data['categories']);
+        }
+
+        if (isset($data['cuisines']) && is_array($data['cuisines'])) {
+            $userMeal->cuisines()->attach($data['cuisines']);
+        }
+
+        if (isset($data['dietary']) && is_array($data['dietary'])) {
+            $userMeal->dietary()->attach($data['dietary']);
+        }
+
+        return $userMeal->fresh(['categories', 'cuisines', 'dietary']);
     }
 
     public function updateRecipe(int $id, array $data, string $authId): UserMeal
@@ -74,10 +137,12 @@ class UserMealService
         $userMeal = UserMeal::where('id', $id)
             ->where('user_id', $authId)
             ->firstOrFail();
+
         if (!$userMeal) {
             Log::error('Meal not found', ['meal_id' => $id, 'user_id' => $authId]);
             throw new \Exception('Meal not found');
         }
+
         $userMeal->fill([
             'title' => $data['title'],
             'ingredients' => $data['ingredients'] ?? $userMeal->ingredients,
@@ -85,9 +150,6 @@ class UserMealService
             'cleaned_ingredients' => $data['ingredients'] ?? $userMeal->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $userMeal->cooking_time,
             'serves' => $data['serves'] ?? $userMeal->serves,
-            'cuisine' => $data['cuisine'] ?? $userMeal->cuisine,
-            'category' => $data['category'] ?? $userMeal->category,
-            'dietary' => $data['dietary'] ?? $userMeal->dietary,
         ]);
 
         if (isset($data['image'])) {
@@ -101,7 +163,21 @@ class UserMealService
         }
 
         $userMeal->save();
-        return $userMeal;
+
+        // Update relationships
+        if (isset($data['categories'])) {
+            $userMeal->categories()->sync($data['categories']);
+        }
+
+        if (isset($data['cuisines'])) {
+            $userMeal->cuisines()->sync($data['cuisines']);
+        }
+
+        if (isset($data['dietary'])) {
+            $userMeal->dietary()->sync($data['dietary']);
+        }
+
+        return $userMeal->fresh(['categories', 'cuisines', 'dietary']);
     }
 
     public function toggleStatus(string $authId, $mealId): void
@@ -116,7 +192,8 @@ class UserMealService
 
     public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return UserMeal::where('user_id', $authId)
+        return UserMeal::with(['categories', 'cuisines', 'dietary'])
+            ->where('user_id', $authId)
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(50);
@@ -124,19 +201,20 @@ class UserMealService
 
     public function search($searchTerm, string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return UserMeal::where('user_id', $authId)
+        return UserMeal::with(['categories', 'cuisines', 'dietary'])
+            ->where('user_id', $authId)
             ->where('title', 'LIKE', '%' . $searchTerm . '%')
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(10);
     }
 
-
     public function addFromRecipe(string $authId, int $recipeId): UserMeal
     {
-        $recipe = Recipe::findOrFail($recipeId);
+        $recipe = Recipe::with(['categories', 'cuisines', 'dietary'])->findOrFail($recipeId);
 
-        return UserMeal::create([
+        // Create the user meal
+        $userMeal = UserMeal::create([
             'user_id' => $authId,
             'recipe_id' => $recipe->id,
             'title' => $recipe->title,
@@ -146,11 +224,30 @@ class UserMealService
             'cleaned_ingredients' => $recipe->cleaned_ingredients,
             'cooking_time' => $recipe->cooking_time,
             'serves' => $recipe->serves,
-            'cuisine' => $recipe->cuisine,
-            'category' => $recipe->category,
-            'dietary' => $recipe->dietary,
             'active' => true
         ]);
+
+        // Copy relationships from recipe to user meal
+
+        // Copy categories
+        if ($recipe->categories && $recipe->categories->count() > 0) {
+            $categoryIds = $recipe->categories->pluck('id')->toArray();
+            $userMeal->categories()->attach($categoryIds);
+        }
+
+        // Copy cuisines
+        if ($recipe->cuisines && $recipe->cuisines->count() > 0) {
+            $cuisineIds = $recipe->cuisines->pluck('id')->toArray();
+            $userMeal->cuisines()->attach($cuisineIds);
+        }
+
+        // Copy dietary requirements
+        if ($recipe->dietary && $recipe->dietary->count() > 0) {
+            $dietaryIds = $recipe->dietary->pluck('id')->toArray();
+            $userMeal->dietary()->attach($dietaryIds);
+        }
+
+        return $userMeal->fresh(['categories', 'cuisines', 'dietary']);
     }
 
     public function deleteMeal(string $authId, int $mealId): void
@@ -160,5 +257,4 @@ class UserMealService
             ->firstOrFail()
             ->delete();
     }
-
 }

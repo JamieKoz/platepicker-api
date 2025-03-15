@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TallyController;
 use App\Http\Controllers\UserMealController;
 use App\Http\Controllers\RestaurantController;
+use App\Http\Controllers\CuisineController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\DietaryController;
 use App\Http\Controllers\UserController;
 /*
 |--------------------------------------------------------------------------
@@ -38,10 +41,6 @@ Route::get('/restaurants/reverse-geocode', [RestaurantController::class, 'revers
 Route::get('/restaurants/photos/{placeId}', [RestaurantController::class, 'getRestaurantPhotos']);
 Route::get('/restaurants/photo-proxy', [RestaurantController::class, 'getPhotoProxy']);
 
-Route::get('/users/list', [UserController::class, 'getUsers']);
-Route::get('/users/search', [UserController::class, 'searchUsers']);
-Route::put('/users/{id}', [UserController::class, 'updateUser']);
-
 Route::get('/recipes', [BaseRecipeController::class, 'getRecipes']);
 Route::delete('/recipes/{id}', [BaseRecipeController::class, 'destroy']);
 Route::post('/recipes/{id}/toggle-status', [BaseRecipeController::class, 'toggleStatus']);
@@ -50,3 +49,7 @@ Route::get('/recipes/search', [BaseRecipeController::class, 'search']);
 Route::post('/recipes', [BaseRecipeController::class, 'store']);
 Route::post('/recipes/{id}', [BaseRecipeController::class, 'update']);
 Route::post('/users/assign-initial-recipes', [BaseRecipeController::class, 'assignInitialMealsToUser']);
+
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/cuisines', [CuisineController::class, 'index']);
+Route::get('/dietary', [DietaryController::class, 'index']);

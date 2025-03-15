@@ -22,9 +22,6 @@ class UserMeal extends Model
         'cleaned_ingredients',
         'serves',
         'cooking_time',
-        'cuisine',
-        'category',
-        'dietary',
     ];
 
     public function recipe()
@@ -35,5 +32,29 @@ class UserMeal extends Model
     public function user()
     {
         return null;
+    }
+
+    /**
+     * Get the categories for this recipe.
+     */
+    public function categories()
+    {
+        return $this->belongsToMany(Category::class, 'user_meals_categories');
+    }
+
+    /**
+     * Get the cuisines for this recipe.
+     */
+    public function cuisines()
+    {
+        return $this->belongsToMany(Cuisine::class, 'user_meals_cuisine');
+    }
+
+    /**
+     * Get the dietary requirements for this recipe.
+     */
+    public function dietary()
+    {
+        return $this->belongsToMany(Dietary::class, 'user_meals_dietary', 'user_meals_id', 'dietary_id');
     }
 }
