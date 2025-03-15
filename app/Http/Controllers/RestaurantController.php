@@ -46,9 +46,9 @@ class RestaurantController extends Controller
         $lng = $request->query('lng');
         $cacheKey = "reverse_geocode_{$lat}_{$lng}";
 
-        if (Cache::has($cacheKey)) {
-            return response()->json(Cache::get($cacheKey));
-        }
+        /* if (Cache::has($cacheKey)) { */
+        /*     return response()->json(Cache::get($cacheKey)); */
+        /* } */
 
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants($lat, $lng);
 
@@ -69,9 +69,9 @@ class RestaurantController extends Controller
         $placeId = $request->query('place_id');
         $cacheKey = "restaurants_{$placeId}";
 
-        if (Cache::has($cacheKey)) {
-            return response()->json(Cache::get($cacheKey));
-        }
+        /* if (Cache::has($cacheKey)) { */
+        /*     return response()->json(Cache::get($cacheKey)); */
+        /* } */
 
         // Get location first
         $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [

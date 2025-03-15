@@ -53,6 +53,7 @@ class UserMealController extends Controller
         $categoryFilter = $request->query('categories');
         $cuisineFilter = $request->query('cuisines');
         $dietaryFilter = $request->query('dietary');
+        $maxCookingTime = $request->query('cooking_time');
 
         if (!empty($userId)) {
             if (!$this->validateUserExistsWithClerk($userId)) {
@@ -65,7 +66,8 @@ class UserMealController extends Controller
                 $userId,
                 $categoryFilter,
                 $cuisineFilter,
-                $dietaryFilter
+                $dietaryFilter,
+                $maxCookingTime,
             );
 
             return response()->json($recipes, 200);
@@ -76,7 +78,8 @@ class UserMealController extends Controller
             27,
             $categoryFilter,
             $cuisineFilter,
-            $dietaryFilter
+            $dietaryFilter,
+            $maxCookingTime,
         );
 
         return response()->json($recipes, 200, [

@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
 
 class UserMealService
 {
-    public function getRandomRecipesUnauthorized($count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): Collection
+    public function getRandomRecipesUnauthorized($count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
         $query = Recipe::query()
             ->with(['categories', 'cuisines', 'dietary'])
@@ -46,6 +46,13 @@ class UserMealService
             });
         }
 
+        if ($cookingTime) {
+            $query->where(function ($q) use ($cookingTime) {
+                $q->where('cooking_time', '<=', $cookingTime)
+                    ->orWhereNull('cooking_time');
+            });
+        }
+
         $recipes = $query->inRandomOrder()->take($count)->get();
 
         foreach ($recipes as $recipe) {
@@ -55,7 +62,7 @@ class UserMealService
         return $recipes;
     }
 
-    public function getRandomRecipesActive($count = 27, $authId, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): Collection
+    public function getRandomRecipesActive($count = 27, $authId, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
         $query = UserMeal::with(['categories', 'cuisines', 'dietary', 'recipe'])
         ->select('user_meals.*')
@@ -83,6 +90,14 @@ class UserMealService
             $dietaryIds = explode(',', $dietaryFilter);
             $query->whereHas('dietary', function ($q) use ($dietaryIds) {
                 $q->whereIn('dietary.id', $dietaryIds);
+            });
+        }
+
+
+        if ($cookingTime) {
+            $query->where(function ($q) use ($cookingTime) {
+                $q->where('cooking_time', '<=', $cookingTime)
+                    ->orWhereNull('cooking_time');
             });
         }
 
