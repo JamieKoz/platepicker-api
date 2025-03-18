@@ -169,4 +169,40 @@ class BaseRecipeController extends Controller
             return response()->json(['error' => 'Failed to fetch recipes'], 500);
         }
     }
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->header('X-User-ID');
+
+            if (!$userId) {
+                return response()->json(['error' => 'User ID required'], 400);
+            }
+
+            if (!$this->validateIsAdminWithClerk($userId)) {
+                return response()->json(['error' => 'Unauthorized.'], 500);
+            }
+
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'ingredients' => 'nullable|string',
+                'instructions' => 'nullable|string',
+                'cooking_time' => 'nullable|string',
+                'serves' => 'nullable|string',
+                'categories' => 'nullable|array',
+                'categories.*' => 'exists:categories,id',
+                'cuisines' => 'nullable|array',
+                'cuisines.*' => 'exists:cuisines,id',
+                'dietary' => 'nullable|array',
+                'dietary.*' => 'exists:dietary,id',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+                'active' => 'nullable|boolean'
+            ]);
+
+            $recipe = $this->baseRecipeService->createRecipe($validated, $userId);
+            return response()->json($recipe, 201);
+        } catch (\Exception $e) {
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'Failed to create recipe'], 500);
+        }
+    }
 }
