@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class UserMeal extends Model
 {
@@ -56,5 +57,14 @@ class UserMeal extends Model
     public function dietary()
     {
         return $this->belongsToMany(Dietary::class, 'user_meals_dietary', 'user_meals_id', 'dietary_id');
+    }
+
+
+    /**
+     * Get the recipe lines for the recipe.
+     */
+    public function recipeLines(): HasMany
+    {
+        return $this->hasMany(RecipeLine::class)->orderBy('sort_order');
     }
 }

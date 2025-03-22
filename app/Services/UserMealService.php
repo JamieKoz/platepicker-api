@@ -3,12 +3,10 @@
 namespace App\Services;
 
 use App\Models\Recipe;
-use App\Models\User;
 use App\Models\UserMeal;
-use App\Models\UserMealTally;
-use App\Models\Category;
-use App\Models\Cuisine;
-use App\Models\Dietary;
+use App\Models\Ingredient;
+use App\Models\Measurement;
+use App\Models\RecipeLine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -144,7 +142,10 @@ class UserMealService
             $userMeal->dietary()->attach($data['dietary']);
         }
 
-        return $userMeal->fresh(['categories', 'cuisines', 'dietary']);
+        if (isset($data['recipe_lines']) && is_array($data['recipe_lines'])) {
+            $this->saveRecipeLines($userMeal, $data['recipe_lines']);
+        }
+        return $userMeal->fresh(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
     }
 
     public function updateRecipe(int $id, array $data, string $authId): UserMeal
@@ -180,19 +181,67 @@ class UserMealService
         $userMeal->save();
 
         // Update relationships
+        $userMeal->categories()->detach();
         if (isset($data['categories'])) {
             $userMeal->categories()->sync($data['categories']);
         }
 
+        $userMeal->cuisines()->detach();
         if (isset($data['cuisines'])) {
             $userMeal->cuisines()->sync($data['cuisines']);
         }
 
+        $userMeal->dietary()->detach();
         if (isset($data['dietary'])) {
             $userMeal->dietary()->sync($data['dietary']);
         }
+        $userMeal->recipeLines()->delete();
 
-        return $userMeal->fresh(['categories', 'cuisines', 'dietary']);
+        if (isset($data['recipe_lines']) && is_array($data['recipe_lines'])) {
+            $this->saveRecipeLines($userMeal, $data['recipe_lines']);
+        }
+        return $userMeal->fresh(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
+    }
+
+    private function saveRecipeLines(UserMeal $userMeal, array $recipeLines): void
+    {
+        $sortOrder = 1;
+
+        foreach ($recipeLines as $line) {
+            // Handle ingredient - either use provided ID or find/create by name
+            if (!empty($line['ingredient_id'])) {
+                $ingredientId = $line['ingredient_id'];
+            } elseif (!empty($line['ingredient_name'])) {
+                // Find or create ingredient by name
+                $ingredient = Ingredient::firstOrCreate(['name' => $line['ingredient_name']]);
+                $ingredientId = $ingredient->id;
+            } else {
+                // Skip if no ingredient provided
+                continue;
+            }
+
+            // Create recipe line
+            $recipeLine = new RecipeLine([
+                'user_meal_id' => $userMeal->id,
+                'ingredient_id' => $ingredientId,
+                'quantity' => $line['quantity'] ?? null,
+                'sort_order' => $line['sort_order'] ?? $sortOrder,
+            ]);
+
+            // Handle measurement if provided
+            if (!empty($line['measurement_id'])) {
+                $recipeLine->measurement_id = $line['measurement_id'];
+            } elseif (!empty($line['measurement_name'])) {
+                // Find or create measurement by name
+                $measurement = Measurement::firstOrCreate([
+                    'name' => $line['measurement_name']
+                ]);
+                $recipeLine->measurement_id = $measurement->id;
+            }
+
+            $recipeLine->save();
+            $sortOrder++;
+        }
     }
 
     public function toggleStatus(string $authId, $mealId): void
@@ -207,7 +256,7 @@ class UserMealService
 
     public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return UserMeal::with(['categories', 'cuisines', 'dietary'])
+        return UserMeal::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->where('user_id', $authId)
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
@@ -216,7 +265,7 @@ class UserMealService
 
     public function search($searchTerm, string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return UserMeal::with(['categories', 'cuisines', 'dietary'])
+        return UserMeal::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->where('user_id', $authId)
             ->where('title', 'LIKE', '%' . $searchTerm . '%')
             ->orderBy('active', $activeDirection)
@@ -226,7 +275,7 @@ class UserMealService
 
     public function addFromRecipe(string $authId, int $recipeId): UserMeal
     {
-        $recipe = Recipe::with(['categories', 'cuisines', 'dietary'])->findOrFail($recipeId);
+        $recipe = Recipe::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])->findOrFail($recipeId);
 
         // Create the user meal
         $userMeal = UserMeal::create([
@@ -241,8 +290,6 @@ class UserMealService
             'serves' => $recipe->serves,
             'active' => true
         ]);
-
-        // Copy relationships from recipe to user meal
 
         // Copy categories
         if ($recipe->categories && $recipe->categories->count() > 0) {
@@ -261,7 +308,19 @@ class UserMealService
             $dietaryIds = $recipe->dietary->pluck('id')->toArray();
             $userMeal->dietary()->attach($dietaryIds);
         }
-
+        // Copy recipe lines
+        if ($recipe->recipeLines && $recipe->recipeLines->count() > 0) {
+            foreach ($recipe->recipeLines as $recipeLine) {
+                RecipeLine::create([
+                    'user_meal_id' => $userMeal->id,
+                    'ingredient_id' => $recipeLine->ingredient_id,
+                    'quantity' => $recipeLine->quantity,
+                    'measurement_id' => $recipeLine->measurement_id,
+                    'notes' => $recipeLine->notes,
+                    'sort_order' => $recipeLine->sort_order
+                ]);
+            }
+        }
         return $userMeal->fresh(['categories', 'cuisines', 'dietary']);
     }
 

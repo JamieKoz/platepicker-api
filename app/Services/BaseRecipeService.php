@@ -2,16 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Ingredient;
+use App\Models\Measurement;
 use App\Models\Recipe;
-use App\Models\User;
+use App\Models\RecipeLine;
 use App\Models\UserMeal;
-use App\Models\Category;
-use App\Models\Cuisine;
-use App\Models\Dietary;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 
 class BaseRecipeService
 {
@@ -80,7 +78,10 @@ class BaseRecipeService
             $recipe->dietary()->attach($data['dietary']);
         }
 
-        return $recipe->fresh(['categories', 'cuisines', 'dietary']);
+        if (isset($data['recipe_lines']) && is_array($data['recipe_lines'])) {
+            $this->saveRecipeLines($recipe, $data['recipe_lines']);
+        }
+        return $recipe->fresh(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
     }
 
     public function updateRecipe(int $id, array $data): Recipe
@@ -114,19 +115,71 @@ class BaseRecipeService
         $recipe->save();
 
         // Update relationships
+        $recipe->categories()->detach();
         if (isset($data['categories'])) {
             $recipe->categories()->sync($data['categories']);
         }
 
+        $recipe->cuisines()->detach();
         if (isset($data['cuisines'])) {
             $recipe->cuisines()->sync($data['cuisines']);
         }
 
+        $recipe->dietary()->detach();
         if (isset($data['dietary'])) {
             $recipe->dietary()->sync($data['dietary']);
         }
 
-        return $recipe->fresh(['categories', 'cuisines', 'dietary']);
+        $recipe->recipeLines()->delete();
+        if (isset($data['recipe_lines']) && is_array($data['recipe_lines'])) {
+            $this->saveRecipeLines($recipe, $data['recipe_lines']);
+        }
+
+        return $recipe->fresh(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
+    }
+
+    /**
+     * Save recipe lines for a recipe
+     */
+    private function saveRecipeLines(Recipe $recipe, array $recipeLines): void
+    {
+        $sortOrder = 1;
+
+        foreach ($recipeLines as $line) {
+            // Handle ingredient - either use provided ID or find/create by name
+            if (!empty($line['ingredient_id'])) {
+                $ingredientId = $line['ingredient_id'];
+            } elseif (!empty($line['ingredient_name'])) {
+                // Find or create ingredient by name
+                $ingredient = Ingredient::firstOrCreate(['name' => $line['ingredient_name']]);
+                $ingredientId = $ingredient->id;
+            } else {
+                // Skip if no ingredient provided
+                continue;
+            }
+
+            // Create recipe line
+            $recipeLine = new RecipeLine([
+                'recipe_id' => $recipe->id,
+                'ingredient_id' => $ingredientId,
+                'quantity' => $line['quantity'] ?? null,
+                'sort_order' => $line['sort_order'] ?? $sortOrder,
+            ]);
+
+            // Handle measurement if provided
+            if (!empty($line['measurement_id'])) {
+                $recipeLine->measurement_id = $line['measurement_id'];
+            } elseif (!empty($line['measurement_name'])) {
+                // Find or create measurement by name
+                $measurement = Measurement::firstOrCreate([
+                    'name' => $line['measurement_name']
+                ]);
+                $recipeLine->measurement_id = $measurement->id;
+            }
+
+            $recipeLine->save();
+            $sortOrder++;
+        }
     }
 
     public function toggleStatus($mealId): void
@@ -139,7 +192,7 @@ class BaseRecipeService
 
     public function getRecipeList(string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
-        return Recipe::with(['categories', 'cuisines', 'dietary'])
+        return Recipe::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(50);
@@ -148,7 +201,7 @@ class BaseRecipeService
     public function search($searchTerm, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
         return Recipe::where('title', 'LIKE', '%' . $searchTerm . '%')
-            ->with(['categories', 'cuisines', 'dietary'])
+            ->with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(10);
@@ -165,7 +218,7 @@ class BaseRecipeService
 
     public function getRecipes($searchTerm = null, string $titleDirection = 'asc', $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): LengthAwarePaginator
     {
-        $query = Recipe::query()->with(['categories', 'cuisines', 'dietary']);
+        $query = Recipe::query()->with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
 
         if ($searchTerm) {
             $query->where('title', 'LIKE', '%' . $searchTerm . '%');

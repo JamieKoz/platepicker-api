@@ -9,6 +9,8 @@ use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\CuisineController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DietaryController;
+use App\Http\Controllers\IngredientController;
+use App\Http\Controllers\MeasurementController;
 use App\Http\Controllers\UserController;
 /*
 |--------------------------------------------------------------------------
@@ -53,3 +55,5 @@ Route::post('/users/assign-initial-recipes', [BaseRecipeController::class, 'assi
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/cuisines', [CuisineController::class, 'index']);
 Route::get('/dietary', [DietaryController::class, 'index']);
+Route::get('/measurements', [MeasurementController::class, 'index']);
+Route::get('/ingredients/search', [IngredientController::class, 'search']);

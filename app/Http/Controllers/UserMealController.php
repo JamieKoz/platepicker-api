@@ -154,7 +154,14 @@ class UserMealController extends Controller
                 'dietary' => 'nullable|array',
                 'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'active' => 'nullable|boolean'
+                'active' => 'nullable|boolean',
+                'recipe_lines' => 'nullable|array',
+                'recipe_lines.*.ingredient_name' => 'required_without:recipe_lines.*.ingredient_id|string|max:255',
+                'recipe_lines.*.ingredient_id' => 'nullable|exists:ingredients,id',
+                'recipe_lines.*.quantity' => 'nullable|numeric',
+                'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
+                'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
+                'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
 
             $recipe = $this->userMealService->createRecipe($validated, $userId);
@@ -186,13 +193,21 @@ class UserMealController extends Controller
                 'dietary' => 'nullable|array',
                 'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'active' => 'nullable|boolean'
+                'active' => 'nullable|boolean',
+                'recipe_lines' => 'nullable|array',
+                'recipe_lines.*.ingredient_name' => 'required_without:recipe_lines.*.ingredient_id|string|max:255',
+                'recipe_lines.*.ingredient_id' => 'nullable|exists:ingredients,id',
+                'recipe_lines.*.quantity' => 'nullable|numeric',
+                'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
+                'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
+                'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
 
             $recipe = $this->userMealService->updateRecipe($id, $validated, $authId);
             return response()->json($recipe);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
             return response()->json(['error' => 'Failed to update recipe'], 500);
         }
     }
