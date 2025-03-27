@@ -52,8 +52,38 @@ Route::post('/recipes', [BaseRecipeController::class, 'store']);
 Route::post('/recipes/{id}', [BaseRecipeController::class, 'update']);
 Route::post('/users/assign-initial-recipes', [BaseRecipeController::class, 'assignInitialMealsToUser']);
 
+// Category routes
 Route::get('/categories', [CategoryController::class, 'index']);
+Route::post('/categories', [CategoryController::class, 'store']);
+Route::get('/categories/{id}', [CategoryController::class, 'show']);
+Route::put('/categories/{id}', [CategoryController::class, 'update']);
+Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+
+// Cuisine routes
 Route::get('/cuisines', [CuisineController::class, 'index']);
+Route::post('/cuisines', [CuisineController::class, 'store']);
+Route::get('/cuisines/{id}', [CuisineController::class, 'show']);
+Route::put('/cuisines/{id}', [CuisineController::class, 'update']);
+Route::delete('/cuisines/{id}', [CuisineController::class, 'destroy']);
+
+// Dietary routes
 Route::get('/dietary', [DietaryController::class, 'index']);
+Route::post('/dietary', [DietaryController::class, 'store']);
+Route::get('/dietary/{id}', [DietaryController::class, 'show']);
+Route::put('/dietary/{id}', [DietaryController::class, 'update']);
+Route::delete('/dietary/{id}', [DietaryController::class, 'destroy']);
+
+// Measurement routes
 Route::get('/measurements', [MeasurementController::class, 'index']);
+Route::post('/measurements', [MeasurementController::class, 'store']);
+Route::get('/measurements/{id}', [MeasurementController::class, 'show']);
+Route::put('/measurements/{id}', [MeasurementController::class, 'update']);
+Route::delete('/measurements/{id}', [MeasurementController::class, 'destroy']);
+
+// Ingredient routes
+Route::get('/ingredients', [IngredientController::class, 'index']);
 Route::get('/ingredients/search', [IngredientController::class, 'search']);
+Route::post('/ingredients', [IngredientController::class, 'store']);
+Route::get('/ingredients/{id}', [IngredientController::class, 'show']);
+Route::put('/ingredients/{id}', [IngredientController::class, 'update']);
+Route::delete('/ingredients/{id}', [IngredientController::class, 'destroy']);
