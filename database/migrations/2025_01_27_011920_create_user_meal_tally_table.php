@@ -11,19 +11,19 @@ class CreateUserMealTallyTable extends Migration
      *
      * @return void
      */
+
     public function up()
     {
         Schema::create('user_meal_tally', function (Blueprint $table) {
             $table->id();
             $table->string('user_id');
-            $table->foreignId('recipe_id')->constrained('recipes')->onDelete('cascade');
+            $table->foreignId('user_meal_id')->constrained('user_meals')->onDelete('cascade');
             $table->integer('tally')->default(0);
             $table->timestamp('last_selected_at')->nullable();
             $table->timestamps();
-
-            $table->unique(['user_id', 'recipe_id']);
+            $table->unique(['user_id', 'user_meal_id']);
             $table->index('user_id');
-            $table->index('selection_count');
+            $table->index('tally');
         });
     }
 

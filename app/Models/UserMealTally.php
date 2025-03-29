@@ -13,6 +13,7 @@ class UserMealTally extends Model
 
     protected $fillable = [
         'user_id',
+        'user_meal_id',
         'recipe_id',
         'tally',
         'last_selected_at'
@@ -24,8 +25,7 @@ class UserMealTally extends Model
 
     public function userMeal()
     {
-        return $this->belongsTo(UserMeal::class, 'recipe_id', 'recipe_id')
-            ->where('user_meals.user_id', $this->user_id);
+        return $this->belongsTo(UserMeal::class, 'user_meal_id');
     }
 
     public function recipe()

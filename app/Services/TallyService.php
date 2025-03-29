@@ -18,96 +18,49 @@ class TallyService
             ->take(3)
             ->get()
             ->map(function ($tally) {
-                // First try to get from UserMeal
-                $userMeal = UserMeal::where('recipe_id', $tally->recipe_id)
-                    ->where('user_id', $tally->user_id)
-                    ->first();
+                // Get the user meal directly
+                $userMeal = UserMeal::find($tally->user_meal_id);
 
-                // If not in UserMeal, try to get from Recipe
-                if (!$userMeal || (!$userMeal->title && $userMeal->recipe_id)) {
-                    $recipe = Recipe::find($tally->recipe_id);
-                    if (!$recipe) {
-                        Log::warning('No matching meal or recipe found', [
-                            'tally_id' => $tally->id,
-                            'user_id' => $tally->user_id,
-                            'recipe_id' => $tally->recipe_id
-                        ]);
-                        return null;
-                    }
-
-                    // Use Recipe data
-                    return [
-                        'id' => $tally->id,
-                        'tally' => $tally->tally,
-                        'last_selected_at' => $tally->last_selected_at,
-                        'meal' => [
-                            'id' => $recipe->id,
-                            'title' => $recipe->title,
-                            'ingredients' => $recipe->ingredients,
-                            'instructions' => $recipe->instructions,
-                            'image_name' => $recipe->image_name,
-                            'recipe_id' => $recipe->id,
-                            'cleaned_ingredients' => $recipe->cleaned_ingredients,
-                            'serves' => $recipe->serves,
-                            'cooking_time' => $recipe->cooking_time,
-                            'dietary' => $recipe->dietary,
-                            'active' => true,
-                            'created_at' => $recipe->created_at,
-                            'updated_at' => $recipe->updated_at
-                        ]
-                    ];
+                if (!$userMeal) {
+                    Log::warning('No matching user meal found', [
+                        'tally_id' => $tally->id,
+                        'user_id' => $tally->user_id,
+                        'user_meal_id' => $tally->user_meal_id
+                    ]);
+                    return null;
                 }
+
+                // Load relationships before returning
+                $userMeal->load(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
 
                 // Use UserMeal data
                 return [
                     'id' => $tally->id,
                     'tally' => $tally->tally,
                     'last_selected_at' => $tally->last_selected_at,
-                    'meal' => [
-                        'id' => $userMeal->id,
-                        'title' => $userMeal->title,
-                        'ingredients' => $userMeal->ingredients,
-                        'instructions' => $userMeal->instructions,
-                        'image_name' => $userMeal->image_name,
-                        'recipe_id' => $userMeal->recipe_id,
-                        'serves' => $userMeal->serves,
-                        'cooking_time' => $userMeal->cooking_time,
-                        'dietary' => $userMeal->dietary,
-                        'cleaned_ingredients' => $userMeal->cleaned_ingredients,
-                        'active' => $userMeal->active,
-                        'created_at' => $userMeal->created_at,
-                        'updated_at' => $userMeal->updated_at
-                    ]
+                    'meal' => $userMeal
                 ];
             })
             ->filter()
             ->values();
     }
 
-    public function incrementMealTally(string $userId, int $mealId): void
+    public function incrementMealTally(string $userId, int $userMealId): void
     {
         $user = User::where('auth_id', $userId)->firstOrFail();
-        $userMeal = UserMeal::find($mealId);
+        $userMeal = UserMeal::find($userMealId);
 
-        // If not found as UserMeal, check if it's a recipe
-        $recipe = Recipe::find($mealId);
-
-        // Determine which ID to use for the tally
-        $recipeId = null;
-        if ($userMeal) {
-            // If it's a user meal, use its recipe_id if it has one, otherwise use its own id
-            $recipeId = $userMeal->recipe_id ?? $userMeal->id;
-        } elseif ($recipe) {
-            // If it's a recipe, use its id
-            $recipeId = $recipe->id;
-        } else {
-            // If neither found, use the provided ID
-            $recipeId = $mealId;
+        if (!$userMeal) {
+            Log::warning('User meal not found for tally increment', [
+                'user_id' => $userId,
+                'user_meal_id' => $userMealId
+            ]);
+            return;
         }
 
         $tally = UserMealTally::firstOrNew([
             'user_id' => $user->id,
-            'recipe_id' => $recipeId
+            'user_meal_id' => $userMealId
         ]);
 
         if (!$tally->exists) {
@@ -122,39 +75,28 @@ class TallyService
 
     public function getTopMeals()
     {
-        return UserMealTally::select('recipe_id', DB::raw('SUM(tally) as total_tally'))
-            ->groupBy('recipe_id')
+        return UserMealTally::select('user_meal_id', DB::raw('SUM(tally) as total_tally'))
+            ->groupBy('user_meal_id')
             ->orderBy('total_tally', 'desc')
             ->take(3)
             ->get()
             ->map(function ($tally) {
-                $recipe = Recipe::find($tally->recipe_id);
+                $userMeal = UserMeal::find($tally->user_meal_id);
 
-                if (!$recipe) {
-                    Log::warning('No recipe found for top meal tally', [
-                        'recipe_id' => $tally->recipe_id,
+                if (!$userMeal) {
+                    Log::warning('No user meal found for top meal tally', [
+                        'user_meal_id' => $tally->user_meal_id,
                         'total_tally' => $tally->total_tally
                     ]);
                     return null;
                 }
 
+                // Load relationships
+                $userMeal->load(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
+
                 return [
                     'total_tally' => $tally->total_tally,
-                    'meal' => [
-                        'id' => $recipe->id,
-                        'title' => $recipe->title,
-                        'ingredients' => $recipe->ingredients,
-                        'instructions' => $recipe->instructions,
-                        'image_name' => $recipe->image_name,
-                        'recipe_id' => $recipe->id,
-                        'serves' => $recipe->serves,
-                        'cooking_time' => $recipe->cooking_time,
-                        'dietary' => $recipe->dietary,
-                        'cleaned_ingredients' => $recipe->cleaned_ingredients,
-                        'active' => true,
-                        'created_at' => $recipe->created_at,
-                        'updated_at' => $recipe->updated_at
-                    ]
+                    'meal' => $userMeal
                 ];
             })
             ->filter()

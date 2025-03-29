@@ -62,7 +62,14 @@ class UserMealService
 
     public function getRandomRecipesActive($count = 27, $authId, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
-        $query = UserMeal::with(['categories', 'cuisines', 'dietary', 'recipe'])
+        $query = UserMeal::with([
+            'categories',
+            'cuisines',
+            'dietary',
+            'recipe',
+            'recipeLines.ingredient',
+            'recipeLines.measurement'
+        ])
         ->select('user_meals.*')
         ->where('user_meals.active', 1)
         ->where('user_meals.user_id', $authId);
@@ -91,7 +98,6 @@ class UserMealService
             });
         }
 
-
         if ($cookingTime) {
             $query->where(function ($q) use ($cookingTime) {
                 $q->where('cooking_time', '<=', $cookingTime)
@@ -113,7 +119,6 @@ class UserMealService
         $userMeal = new UserMeal();
         $userMeal->user_id = $authId;
         $userMeal->title = $data['title'];
-        $userMeal->ingredients = $data['ingredients'];
         $userMeal->instructions = $data['instructions'];
         $userMeal->cleaned_ingredients = $data['ingredients'];
         $userMeal->cooking_time = $data['cooking_time'];
@@ -161,7 +166,6 @@ class UserMealService
 
         $userMeal->fill([
             'title' => $data['title'],
-            'ingredients' => $data['ingredients'] ?? $userMeal->ingredients,
             'instructions' => $data['instructions'] ?? $userMeal->instructions,
             'cleaned_ingredients' => $data['ingredients'] ?? $userMeal->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $userMeal->cooking_time,

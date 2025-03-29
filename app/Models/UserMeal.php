@@ -17,7 +17,6 @@ class UserMeal extends Model
         'recipe_id',
         'active',
         'title',
-        'ingredients',
         'instructions',
         'image_name',
         'cleaned_ingredients',

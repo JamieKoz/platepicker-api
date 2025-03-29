@@ -143,7 +143,6 @@ class UserMealController extends Controller
 
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
-                'ingredients' => 'string',
                 'instructions' => 'string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
@@ -182,7 +181,6 @@ class UserMealController extends Controller
         try {
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
-                'ingredients' => 'nullable|string',
                 'instructions' => 'nullable|string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
