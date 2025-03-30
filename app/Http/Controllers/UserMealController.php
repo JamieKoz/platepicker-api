@@ -114,17 +114,33 @@ class UserMealController extends Controller
                 return response()->json(['error' => 'User ID required'], 400);
             }
 
-            if(!$this->validateUserExistsWithClerk($userId)){
+            if (!$this->validateUserExistsWithClerk($userId)) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
             $activeDirection = $request->query('active_direction', 'desc');
             $titleDirection = $request->query('title_direction', 'asc');
-            $list = $this->userMealService->getRecipeList($userId, $activeDirection, $titleDirection);
-            return response()->json($list);
+
+            $groupBy = $request->query('group_by', 'none');
+            $page = (int) $request->query('page', 1);
+
+            if ($groupBy === 'none') {
+                // Use original pagination method
+                $list = $this->userMealService->getRecipeList($userId, $activeDirection, $titleDirection);
+                return response()->json($list);
+            } else {
+
+                $groupedList = $this->userMealService->getRecipeListGrouped(
+                    $groupBy,
+                    $activeDirection,
+                    $titleDirection,
+                    $page
+                );
+                return response()->json($groupedList);
+            }
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' =>$e->getMessage()], 500);
+            return response()->json(['error' => 'Failed to get List.'], 500);
         }
     }
 
@@ -205,7 +221,6 @@ class UserMealController extends Controller
             return response()->json($recipe);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' => $e->getMessage()], 500);
             return response()->json(['error' => 'Failed to update recipe'], 500);
         }
     }

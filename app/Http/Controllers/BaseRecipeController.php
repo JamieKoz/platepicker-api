@@ -59,28 +59,67 @@ class BaseRecipeController extends Controller
         return false;
     }
 
-    public function search(Request $request)
-    {
-        $searchTerm = $request->query('q');
-        $activeDirection = $request->query('active_direction', 'desc');
-        $titleDirection = $request->query('title_direction', 'asc');
-        $recipes = $this->baseRecipeService->search($searchTerm, $activeDirection, $titleDirection);
-        return response()->json($recipes);
-    }
-
     public function getList(Request $request): JsonResponse
     {
         try {
             if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
+
             $activeDirection = $request->query('active_direction', 'desc');
             $titleDirection = $request->query('title_direction', 'asc');
-            $list = $this->baseRecipeService->getRecipeList($activeDirection, $titleDirection);
-            return response()->json($list);
+            $groupBy = $request->query('group_by', 'none');
+            $page = (int) $request->query('page', 1);
+
+            if ($groupBy === 'none') {
+                // Use original pagination method
+                $list = $this->baseRecipeService->getRecipeList($activeDirection, $titleDirection);
+                return response()->json($list);
+            } else {
+                // Use optimized grouping method with pagination
+                $groupedList = $this->baseRecipeService->getRecipeListGrouped(
+                    $groupBy,
+                    $activeDirection,
+                    $titleDirection,
+                    $page
+                );
+                return response()->json($groupedList);
+            }
         } catch (\Exception $e) {
-            Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to create recipe'], 500);
+            Log::error('Failed to fetch recipe list: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            return response()->json(['error' => 'Failed to fetch recipe list'], 500);
+        }
+    }
+
+    public function search(Request $request)
+    {
+        try {
+            $searchTerm = $request->query('q');
+            $activeDirection = $request->query('active_direction', 'desc');
+            $titleDirection = $request->query('title_direction', 'asc');
+            $groupBy = $request->query('group_by', 'none');
+            $page = (int) $request->query('page', 1);
+
+            if ($groupBy === 'none') {
+                // Use original pagination method
+                $recipes = $this->baseRecipeService->search($searchTerm, $activeDirection, $titleDirection);
+                return response()->json($recipes);
+            } else {
+                // Use optimized grouping method with pagination
+                $groupedRecipes = $this->baseRecipeService->searchGrouped(
+                    $searchTerm,
+                    $groupBy,
+                    $activeDirection,
+                    $titleDirection,
+                    $page
+                );
+                return response()->json($groupedRecipes);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to search recipes: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            return response()->json(['error' => 'Failed to search recipes'], 500);
         }
     }
 
@@ -117,7 +156,7 @@ class BaseRecipeController extends Controller
             return response()->json($recipe);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error' => 'Failed to update meal.'], 500);
         }
     }
 
@@ -150,7 +189,7 @@ class BaseRecipeController extends Controller
         }
     }
 
-     public function getRecipes(Request $request): JsonResponse
+    public function getRecipes(Request $request): JsonResponse
     {
         try {
             if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
@@ -216,7 +255,7 @@ class BaseRecipeController extends Controller
             return response()->json($recipe, 201);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to create recipe: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Failed to create recipe'], 500);
         }
     }
 }
