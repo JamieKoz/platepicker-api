@@ -67,8 +67,9 @@ class RestaurantController extends Controller
     public function getNearbyRestaurants(Request $request)
     {
         $placeId = $request->query('place_id');
-        $cacheKey = "restaurants_{$placeId}";
+        $diningOption = $request->query('dining_option', 'delivery'); // Default to delivery
 
+        $cacheKey = "restaurants_{$placeId}_{$diningOption}";
         /* if (Cache::has($cacheKey)) { */
         /*     return response()->json(Cache::get($cacheKey)); */
         /* } */
@@ -81,7 +82,6 @@ class RestaurantController extends Controller
         ]);
 
         $placeData = $placeResponse->json();
-
         if (!isset($placeData['result']['geometry']['location'])) {
             return response()->json([
                 'error' => 'Location not found'
@@ -91,7 +91,8 @@ class RestaurantController extends Controller
         $location = $placeData['result']['geometry']['location'];
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
             (string)$location['lat'],
-            (string)$location['lng']
+            (string)$location['lng'],
+            $diningOption
         );
 
         // Pre-process restaurants to include a primary photo directly
@@ -102,7 +103,6 @@ class RestaurantController extends Controller
         }
 
         Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
-
         return response()->json($restaurants);
     }
 

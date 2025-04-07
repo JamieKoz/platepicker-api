@@ -35,7 +35,7 @@ class RestaurantService
     /**
      * Fetch and process restaurants with minimal image data initially
      */
-    public function fetchAndProcessRestaurants(string $lat, string $lng): Collection
+    public function fetchAndProcessRestaurants(string $lat, string $lng, $diningOption): Collection
     {
         $processedResults = collect([]);
         $pageCount = 0;
@@ -43,14 +43,15 @@ class RestaurantService
 
         do {
             // Fetch the next page of results
-            $pageResults = $this->fetchPage($lat, $lng, $nextPageToken);
+            $pageResults = $this->fetchPage($lat, $lng, $diningOption, $nextPageToken);
 
             if (!isset($pageResults['results'])) {
                 break;
             }
 
             // Process this page's results
-            $filtered = $this->filterValidRestaurants($pageResults['results']);
+            $filtered = collect($pageResults['results']);
+            /* $filtered = $this->filterValidRestaurants($pageResults['results']); */
             $processedResults = $this->removeDuplicates($processedResults->merge($filtered));
 
             // Get next page token if available
@@ -129,23 +130,47 @@ class RestaurantService
         }
     }
 
-    private function fetchPage(string $lat, string $lng, ?string $pageToken = null): array
+    private function fetchPage(string $lat, string $lng, string $diningOption = 'delivery', ?string $pageToken = null): array
     {
         $cacheKey = "get_geocode_{$lat}_{$lng}" . ($pageToken ? "_page_" . substr($pageToken, 0, 10) : "");
 
         /* if (Cache::has($cacheKey)) { */
         /*     return Cache::get($cacheKey); */
         /* } */
-
+        $keyword = 'opennow';
+        switch ($diningOption) {
+            case 'dine_in':
+                $keyword = 'food, reservable, cafe, opennow';
+                break;
+            case 'takeaway':
+                $keyword = 'delivery, fastfood, takeaway, opennow';
+                break;
+            case 'drive_thru':
+                $keyword = 'delivery, fastfood, drivethru, opennow';
+                break;
+            case 'delivery':
+            default:
+                $keyword = 'delivery, opennow';
+                break;
+        }
         $params = [
             'location' => "{$lat},{$lng}",
             'type' => 'restaurant',
             'rankby' => 'distance',
-            'keyword' => 'food, cafe, delivery, dineIn, reservable',
+            // TAKEAWAY
+            /*             'keyword' => 'delivery, fastfood, takeaway, opennow', */
+
+            // DRIVE THRU
+            /*             'keyword' => 'delivery, fastfood, drivethru, opennow', */
+
+            //DINE IN
+            /*             'keyword' => 'food, reservable, cafe, opennow', */
+
+            // DELIVERY
+            'keyword' => $keyword,
             'key' => config('services.google.maps_api_key')
         ];
 
-        // Add page token if we have one
         if ($pageToken) {
             $params['pagetoken'] = $pageToken;
         }
