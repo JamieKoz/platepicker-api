@@ -40,31 +40,7 @@ class RestaurantController extends Controller
         return response()->json($results);
     }
 
-    public function reverseGeocode(Request $request)
-    {
-        $lat = $request->query('lat');
-        $lng = $request->query('lng');
-        $cacheKey = "reverse_geocode_{$lat}_{$lng}";
-
-        /* if (Cache::has($cacheKey)) { */
-        /*     return response()->json(Cache::get($cacheKey)); */
-        /* } */
-
-        $restaurants = $this->restaurantService->fetchAndProcessRestaurants($lat, $lng);
-
-        // Pre-process restaurants to include a primary photo directly
-        foreach ($restaurants as $index => $restaurant) {
-            if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {
-                $restaurants[$index]['primary_photo'] = array_shift($restaurant['photos']);
-            }
-        }
-
-        Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
-
-        return response()->json($restaurants);
-    }
-
-    public function getNearbyRestaurants(Request $request)
+          public function getNearbyRestaurants(Request $request)
     {
         $placeId = $request->query('place_id');
         $diningOption = $request->query('dining_option', 'delivery'); // Default to delivery
@@ -95,129 +71,189 @@ class RestaurantController extends Controller
             $diningOption
         );
 
-        // Pre-process restaurants to include a primary photo directly
-        foreach ($restaurants as $index => $restaurant) {
+        // Convert collection to array before processing
+        $processedRestaurants = [];
+
+        foreach ($restaurants as $restaurant) {
+            $processedRestaurant = $restaurant;
+
+            // Add a flag to indicate if the restaurant has photos
+            $processedRestaurant['has_additional_photos'] =
+                isset($restaurant['photos']) && !empty($restaurant['photos']);
+
+            // Include only the primary photo for immediate display
             if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {
-                $restaurants[$index]['primary_photo'] = array_shift($restaurant['photos']);
+                // Create a copy of the photos array
+                $photos = $restaurant['photos'];
+                $primaryPhoto = array_shift($photos);
+
+                $processedRestaurant['primary_photo'] = $primaryPhoto;
+
+                // Keep the original photos array in place for additional photos endpoint
+                $processedRestaurant['photos'] = $restaurant['photos'];
             }
+
+            $processedRestaurants[] = $processedRestaurant;
         }
 
-        Cache::put($cacheKey, $restaurants, now()->addSeconds(self::CACHE_DURATION));
-        return response()->json($restaurants);
+        Cache::put($cacheKey, $processedRestaurants, now()->addSeconds(self::CACHE_DURATION));
+        return response()->json($processedRestaurants);
     }
 
-    /**
-     * Get additional photos for a restaurant
-     */
-    public function getRestaurantPhotos(string $placeId)
+    public function reverseGeocode(Request $request)
     {
-        $cacheKey = "restaurant_detailed_photos_{$placeId}";
+        $lat = $request->query('lat');
+        $lng = $request->query('lng');
+        $diningOption = $request->query('dining_option', 'delivery'); // Default to delivery
+
+        if (!$lat || !$lng) {
+            return response()->json([
+                'error' => 'Latitude and longitude are required'
+            ], 400);
+        }
+
+        $cacheKey = "restaurants_geocode_{$lat}_{$lng}_{$diningOption}";
+        /* if (Cache::has($cacheKey)) { */
+        /*     return response()->json(Cache::get($cacheKey)); */
+        /* } */
+
+        $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
+            (string)$lat,
+            (string)$lng,
+            $diningOption
+        );
+
+        // Convert collection to array before processing
+        $processedRestaurants = [];
+
+        foreach ($restaurants as $restaurant) {
+            $processedRestaurant = $restaurant;
+
+            // Add a flag to indicate if the restaurant has photos
+            $processedRestaurant['has_additional_photos'] =
+                isset($restaurant['photos']) && !empty($restaurant['photos']);
+
+            // Include only the primary photo for immediate display
+            if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {
+                // Create a copy of the photos array
+                $photos = $restaurant['photos'];
+                $primaryPhoto = array_shift($photos);
+
+                $processedRestaurant['primary_photo'] = $primaryPhoto;
+
+                // Keep the original photos array in place for additional photos endpoint
+                $processedRestaurant['photos'] = $restaurant['photos'];
+            }
+
+            $processedRestaurants[] = $processedRestaurant;
+        }
+
+        Cache::put($cacheKey, $processedRestaurants, now()->addSeconds(self::CACHE_DURATION));
+        return response()->json($processedRestaurants);
+    }
+
+    public function getRestaurantPhotos($placeId)
+    {
+        $cacheKey = "restaurant_photos_{$placeId}";
 
         if (Cache::has($cacheKey)) {
-            return response()->json(Cache::get($cacheKey));
+            $cachedData = Cache::get($cacheKey);
+            return response()->json($cachedData);
         }
 
-        $photos = $this->restaurantService->fetchAdditionalPhotos($placeId);
-
-        // Limit to maximum photos
-        $photos = array_slice($photos, 0, self::MAX_PHOTOS);
-
-        // Convert photo references to URLs with optimized sizes
-        $photoUrls = collect($photos)->map(function ($photo) {
-            return [
-                'url' => $this->getPhotoUrl($photo['photo_reference'], 400, 400), // Smaller size
-                'width' => $photo['width'] ?? 400,
-                'height' => $photo['height'] ?? 300,
-                'photo_reference' => $photo['photo_reference'] ?? '',
-            ];
-        })->values()->all();
-
-        $result = [
+        // Get detailed place information with photos
+        $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
             'place_id' => $placeId,
-            'photos' => $photoUrls
-        ];
+            'fields' => 'photos',
+            'key' => config('services.google.maps_api_key')
+        ]);
 
-        Cache::put($cacheKey, $result, now()->addSeconds(self::PHOTOS_CACHE_DURATION));
+        $placeData = $placeResponse->json();
 
-        return response()->json($result);
-    }
+        if (!isset($placeData['result']['photos'])) {
+            return response()->json([
+                'photos' => []
+            ]);
+        }
 
-    /**
-     * Build a photo URL from a photo reference
-     */
-    private function getPhotoUrl(string $photoReference, int $maxWidth = 450, int $maxHeight = 450): string
-    {
-        if (strpos($photoReference, 'maps.googleapis.com/maps/api/place/photo') !== false) {
-            // Extract the actual photo reference from the URL
-            $matches = [];
-            if (preg_match('/photo_reference=([^&]+)/', $photoReference, $matches)) {
-                $photoReference = urldecode($matches[1]);
+        $photos = [];
+        $limit = 4; // Limit to 4 photos
+        $count = 0;
+
+        foreach ($placeData['result']['photos'] as $photo) {
+            if (isset($photo['photo_reference'])) {
+                $photos[] = [
+                    'reference' => $photo['photo_reference'], // Note: using 'reference' not 'photo_reference'
+                    'width' => $photo['width'] ?? 400,
+                    'height' => $photo['height'] ?? 400
+                ];
+
+                $count++;
+                if ($count >= $limit) {
+                    break;
+                }
             }
         }
 
-        // Otherwise build the Places API URL
-        return 'https://maps.googleapis.com/maps/api/place/photo?' . http_build_query([
-            'maxwidth' => $maxWidth,
-            'maxheight' => $maxHeight,
-            'photo_reference' => $photoReference,
-            'key' => config('services.google.maps_api_key')
-        ]);
+        $response = [
+            'photos' => $photos
+        ];
+
+
+        Cache::put($cacheKey, $response, now()->addDay());
+        return response()->json($response);
     }
 
     public function getPhotoProxy(Request $request)
     {
         $photoReference = $request->query('photo_reference');
-        $maxWidth = $request->query('maxwidth', 450);
-        $maxHeight = $request->query('maxheight', 350);
+        $maxWidth = $request->query('maxwidth', 800);
+        $maxHeight = $request->query('maxheight', 600);
 
         if (!$photoReference) {
             return response()->json(['error' => 'Photo reference is required'], 400);
         }
 
-        // Generate a unique cache key for this photo
-        $cacheKey = "photo_proxy_" . md5($photoReference . $maxWidth . $maxHeight);
+        $cacheKey = "photo_proxy_{$photoReference}_{$maxWidth}_{$maxHeight}";
 
-        // Try to get from cache first
         if (Cache::has($cacheKey)) {
-            $cachedPhoto = Cache::get($cacheKey);
-            return response($cachedPhoto['data'])
-                ->header('Content-Type', $cachedPhoto['content_type'])
-                ->header('Cache-Control', 'public, max-age=86400');
+            $cachedResponse = Cache::get($cacheKey);
+            return response($cachedResponse['data'], 200, [
+                'Content-Type' => $cachedResponse['content_type'],
+                'Cache-Control' => 'public, max-age=86400'
+            ]);
         }
 
-        $photoUrl = "https://maps.googleapis.com/maps/api/place/photo?" . http_build_query([
-            'maxwidth' => $maxWidth,
-            'maxheight' => $maxHeight,
-            'photo_reference' => $photoReference,
-            'key' => config('services.google.maps_api_key')
-        ]);
-
         try {
-            $response = Http::withOptions([
-                'allow_redirects' => true,
-                'timeout' => 5 // 5 second timeout
-            ])
-                ->withHeaders(['Accept' => 'image/*'])
-                ->get($photoUrl);
+            $response = Http::get('https://maps.googleapis.com/maps/api/place/photo', [
+                'maxwidth' => $maxWidth,
+                'maxheight' => $maxHeight,
+                'photo_reference' => $photoReference,
+                'key' => config('services.google.maps_api_key')
+            ]);
 
             if ($response->successful()) {
                 $contentType = $response->header('Content-Type');
-                $photoData = $response->body();
+                $data = $response->body();
 
-                // Store in cache
+                // Cache the photo for faster retrieval next time
                 Cache::put($cacheKey, [
-                    'data' => $photoData,
+                    'data' => $data,
                     'content_type' => $contentType
-                ], now()->addDays(7)); // Cache for 7 days
+                ], now()->addDays(7));
 
-                return response($photoData)
-                    ->header('Content-Type', $contentType)
-                    ->header('Cache-Control', 'public, max-age=604800'); // 7 days
+
+                return response($data, 200, [
+                    'Content-Type' => $contentType,
+                    'Cache-Control' => 'public, max-age=86400'
+                ]);
             } else {
-                return response()->json(['error' => 'Failed to fetch photo'], $response->status());
+
+                // Return a fallback image or error
+                return response()->json(['error' => 'Unable to fetch photo'], $response->status());
             }
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error' => 'Error fetching photo'], 500);
         }
     }
 }

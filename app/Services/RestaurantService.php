@@ -35,44 +35,99 @@ class RestaurantService
     /**
      * Fetch and process restaurants with minimal image data initially
      */
-    public function fetchAndProcessRestaurants(string $lat, string $lng, $diningOption): Collection
+    public function fetchAndProcessRestaurants(string $lat, string $lng, string $diningOption = 'delivery'): array
     {
-        $processedResults = collect([]);
-        $pageCount = 0;
-        $nextPageToken = null;
+        // Maximum number of restaurants to return
+        $MAX_RESTAURANTS = 25;
 
-        do {
-            // Fetch the next page of results
-            $pageResults = $this->fetchPage($lat, $lng, $diningOption, $nextPageToken);
+        $allResults = [];
+        $pageToken = null;
+        $maxPages = 2; // Limit to 2 pages to avoid excessive API calls
 
-            if (!isset($pageResults['results'])) {
+        for ($i = 0; $i < $maxPages; $i++) {
+            $response = $this->fetchPage($lat, $lng, $diningOption, $pageToken);
+
+            if ($response['status'] !== 'OK') {
                 break;
             }
 
-            // Process this page's results
-            $filtered = collect($pageResults['results']);
-            /* $filtered = $this->filterValidRestaurants($pageResults['results']); */
-            $processedResults = $this->removeDuplicates($processedResults->merge($filtered));
+            $allResults = array_merge($allResults, $response['results']);
 
-            // Get next page token if available
-            $nextPageToken = $pageResults['next_page_token'] ?? null;
-            $pageCount++;
-
-            // If we have a next page token and need more results, wait before next request
-            if ($nextPageToken && $processedResults->count() < self::TARGET_RESULTS) {
-                usleep(250000); // 250ms delay (reduced from 1s to speed up response)
+            // If we already have enough restaurants, don't fetch more pages
+            if (count($allResults) >= $MAX_RESTAURANTS) {
+                Log::info("Reached max restaurant count ({$MAX_RESTAURANTS}), not fetching more pages");
+                break;
             }
-        } while (
-            $nextPageToken !== null &&
-            $pageCount < self::MAX_PAGES &&
-            $processedResults->count() < self::TARGET_RESULTS
-        );
 
-        // Return restaurants with just ONE photo each for fast initial response
-        return $this->enrichWithInitialPhoto($processedResults)
-            ->take(self::TARGET_RESULTS)
-            ->shuffle()
-            ->values();
+            // Check if there are more pages
+            if (!isset($response['next_page_token'])) {
+                break;
+            }
+
+            $pageToken = $response['next_page_token'];
+
+            // Google requires a short delay before using the next page token
+            sleep(2);
+        }
+
+        // Process and transform the results
+        $restaurants = [];
+        $count = 0;
+
+        foreach ($allResults as $place) {
+            // Skip places without a name or place_id
+            if (!isset($place['name']) || !isset($place['place_id'])) {
+                continue;
+            }
+
+            // Transform the data into our desired format
+            $restaurant = [
+                'name' => $place['name'],
+                'place_id' => $place['place_id'],
+                'vicinity' => $place['vicinity'] ?? '',
+                'rating' => $place['rating'] ?? 0,
+                'user_ratings_total' => $place['user_ratings_total'] ?? 0,
+                'price_level' => $place['price_level'] ?? 0,
+                'photos' => [],
+                'types' => $place['types'] ?? []
+            ];
+
+            // Process photos if available - store all photos for later use
+            if (isset($place['photos']) && !empty($place['photos'])) {
+                foreach ($place['photos'] as $photo) {
+                    if (isset($photo['photo_reference'])) {
+                        // Ensure the photo reference is valid
+                        $photoRef = $photo['photo_reference'];
+                        if (is_string($photoRef) && strlen($photoRef) > 10 && strlen($photoRef) < 400) {
+                            $restaurant['photos'][] = [
+                                'reference' => $photoRef,
+                                'width' => $photo['width'] ?? 1000,
+                                'height' => $photo['height'] ?? 600
+                            ];
+
+                            if (count($restaurant['photos']) >= 5) {
+                                break;
+                            }
+                        } else {
+                            Log::warning("Skipping invalid photo reference for restaurant {$place['place_id']}: " .
+                                (is_string($photoRef) ? substr($photoRef, 0, 30) . "..." : "non-string"));
+                        }
+                    }
+                }
+            }
+
+            $restaurants[] = $restaurant;
+            $count++;
+
+            // Limit to max restaurants
+            if ($count >= $MAX_RESTAURANTS) {
+                Log::info("Limiting to {$MAX_RESTAURANTS} restaurants (had " . count($allResults) . " total)");
+                break;
+            }
+        }
+
+        Log::info("Returning {$count} processed restaurants for {$diningOption} option");
+        return $restaurants;
     }
 
     /**
@@ -107,7 +162,7 @@ class RestaurantService
             }
 
             $photoReferences = collect($details['result']['photos'])
-            ->take(self::FULL_PHOTO_COUNT)
+                ->take(self::FULL_PHOTO_COUNT)
                 ->map(function ($photo) {
                     return [
                         'photo_reference' => $photo['photo_reference'],
@@ -132,15 +187,16 @@ class RestaurantService
 
     private function fetchPage(string $lat, string $lng, string $diningOption = 'delivery', ?string $pageToken = null): array
     {
-        $cacheKey = "get_geocode_{$lat}_{$lng}" . ($pageToken ? "_page_" . substr($pageToken, 0, 10) : "");
-
+        $cacheKey = "get_geocode_{$lat}_{$lng}_{$diningOption}" . ($pageToken ? "_page_" . substr($pageToken, 0, 10) : "");
         /* if (Cache::has($cacheKey)) { */
         /*     return Cache::get($cacheKey); */
         /* } */
+
+        // Determine keywords based on dining option
         $keyword = 'opennow';
         switch ($diningOption) {
             case 'dine_in':
-                $keyword = 'food, reservable, cafe, opennow';
+                $keyword = 'food, fastfood, reservable, cafe, opennow';
                 break;
             case 'takeaway':
                 $keyword = 'delivery, fastfood, takeaway, opennow';
@@ -153,27 +209,22 @@ class RestaurantService
                 $keyword = 'delivery, opennow';
                 break;
         }
+
         $params = [
             'location' => "{$lat},{$lng}",
             'type' => 'restaurant',
             'rankby' => 'distance',
-            // TAKEAWAY
-            /*             'keyword' => 'delivery, fastfood, takeaway, opennow', */
-
-            // DRIVE THRU
-            /*             'keyword' => 'delivery, fastfood, drivethru, opennow', */
-
-            //DINE IN
-            /*             'keyword' => 'food, reservable, cafe, opennow', */
-
-            // DELIVERY
             'keyword' => $keyword,
             'key' => config('services.google.maps_api_key')
         ];
 
+        // Add page token if we have one
         if ($pageToken) {
             $params['pagetoken'] = $pageToken;
         }
+
+        // Log the request for debugging
+        Log::info('Fetching restaurants with params', ['dining_option' => $diningOption, 'keyword' => $keyword]);
 
         $response = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', $params);
         $googleResponse = $response->json();
@@ -181,6 +232,12 @@ class RestaurantService
         // Only cache successful responses
         if ($googleResponse['status'] === 'OK') {
             Cache::put($cacheKey, $googleResponse, now()->addHour());
+        } else {
+            Log::error('Google Places API Error', [
+                'status' => $googleResponse['status'] ?? 'unknown',
+                'error_message' => $googleResponse['error_message'] ?? 'No error message provided',
+                'dining_option' => $diningOption
+            ]);
         }
 
         return $googleResponse;
