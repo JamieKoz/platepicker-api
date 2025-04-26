@@ -1,6 +1,6 @@
 FROM php:8.1-apache
 # Enable required Apache modules
-RUN a2enmod rewrite
+RUN a2enmod rewrite ssl
 # Install PHP extensions and dependencies
 RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     vim \
     rsyslog \
+ 	certbot \
+    python3-certbot-apache \
     && docker-php-ext-install pdo pdo_sqlite \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 # Configure Apache logging
@@ -55,4 +57,9 @@ RUN php artisan storage:link \
 # Expose port 80 for Apache
 EXPOSE 80
 # Start Apache
+
+RUN mkdir -p /etc/apache2/ssl
+RUN a2ensite default-ssl
+# Expose both HTTP and HTTPS ports
+EXPOSE 80 443
 CMD ["apache2-foreground"]

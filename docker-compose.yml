@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:80"
+      - "443:443"
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
@@ -15,3 +16,5 @@ services:
       - ./storage:/var/www/html/storage
       - ./database:/var/www/html/database
       - ./storage/logs:/var/log/apache2
+      - ./ssl:/etc/apache2/ssl
+      - ./apache-sites:/etc/apache2/sites-available
