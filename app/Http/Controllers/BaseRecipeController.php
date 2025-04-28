@@ -62,8 +62,15 @@ class BaseRecipeController extends Controller
     public function getList(Request $request): JsonResponse
     {
         try {
-            if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
+            $userData = json_decode($request->header('X-User-Data'), true);
+
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+
+            // Pass the extracted user ID to the validation function
+            if (!$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
             }
 
             $activeDirection = $request->query('active_direction', 'desc');
@@ -126,13 +133,19 @@ class BaseRecipeController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         try {
-            if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
+            $userData = json_decode($request->header('X-User-Data'), true);
+
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+
+            if (!$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
             }
 
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
-                'ingredients' => 'nullable|string',
+                //'ingredients' => 'nullable|string',
                 'instructions' => 'nullable|string',
                 'cooking_time' => 'nullable|string',
                 'serves' => 'nullable|string',
@@ -163,8 +176,14 @@ class BaseRecipeController extends Controller
     public function toggleStatus(Request $request, $id): JsonResponse
     {
         try {
-            if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
+            $userData = json_decode($request->header('X-User-Data'), true);
+
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+
+            if (!$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
             }
 
             $this->baseRecipeService->toggleStatus($id);
@@ -177,8 +196,14 @@ class BaseRecipeController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         try {
-            if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
+            $userData = json_decode($request->header('X-User-Data'), true);
+
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+
+            if (!$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
             }
 
             $this->baseRecipeService->deleteMeal($id);
@@ -192,8 +217,14 @@ class BaseRecipeController extends Controller
     public function getRecipes(Request $request): JsonResponse
     {
         try {
-            if (!$this->validateIsAdminWithClerk($request->header('X-User-ID'))) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
+            $userData = json_decode($request->header('X-User-Data'), true);
+
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+
+            if (!$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
             }
 
             $searchTerm = $request->query('q');
@@ -218,14 +249,14 @@ class BaseRecipeController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $userId = $request->header('X-User-ID');
+            $userData = json_decode($request->header('X-User-Data'), true);
 
-            if (!$userId) {
-                return response()->json(['error' => 'User ID required'], 400);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            if (!$this->validateIsAdminWithClerk($userId)) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
+            if (!$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
             }
 
             $validated = $request->validate([

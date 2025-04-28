@@ -47,8 +47,11 @@ class UserMealController extends Controller
 
     public function getRecipe(Request $request)
     {
-        $userId = $request->header('X-User-ID');
-
+        $userId = null;
+        $userData = json_decode($request->header('X-User-Data'), true);
+        if ($userData && isset($userData['id'])) {
+            $userId = $userData['id'];
+        }
         // Extract filter parameters
         $categoryFilter = $request->query('categories');
         $cuisineFilter = $request->query('cuisines');
@@ -56,7 +59,7 @@ class UserMealController extends Controller
         $maxCookingTime = $request->query('cooking_time');
 
         if (!empty($userId)) {
-            if (!$this->validateUserExistsWithClerk($userId)) {
+            if (!$this->validateUserExistsWithClerk($userData['id'])) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -90,12 +93,12 @@ class UserMealController extends Controller
 
     public function search(Request $request)
     {
-        $userId = $request->header('X-User-ID');
-        if (!$userId) {
-            return response()->json(['error' => 'User ID required'], 400);
+        $userData = json_decode($request->header('X-User-Data'), true);
+        if (!$userData || !isset($userData['id'])) {
+            return response()->json(['error' => 'User data not provided.'], 401);
         }
-
-        if(!$this->validateUserExistsWithClerk($userId)){
+        $userId = $userData['id'];
+        if (!$this->validateUserExistsWithClerk($userData['id'])) {
             return response()->json(['error' => 'Unauthorized.'], 500);
         }
 
@@ -109,12 +112,12 @@ class UserMealController extends Controller
     public function getList(Request $request): JsonResponse
     {
         try {
-            $userId = $request->header('X-User-ID');
-            if (!$userId) {
-                return response()->json(['error' => 'User ID required'], 400);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
             }
-
-            if (!$this->validateUserExistsWithClerk($userId)) {
+            $userId = $userData['id'];
+            if (!$this->validateUserExistsWithClerk($userData['id'])) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -147,13 +150,12 @@ class UserMealController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $userId = $request->header('X-User-ID');
-
-            if (!$userId) {
-                return response()->json(['error' => 'User ID required'], 400);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
             }
-
-            if(!$this->validateUserExistsWithClerk($userId)){
+            $userId = $userData['id'];
+            if (!$this->validateUserExistsWithClerk($userData['id'])) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -189,9 +191,13 @@ class UserMealController extends Controller
 
     public function update(Request $request, $id): JsonResponse
     {
-        $authId = $request->header('X-User-ID');
-        if (!$authId) {
-            return response()->json(['error' => 'User ID required'], 400);
+        $userData = json_decode($request->header('X-User-Data'), true);
+        if (!$userData || !isset($userData['id'])) {
+            return response()->json(['error' => 'User data not provided.'], 401);
+        }
+        $userId = $userData['id'];
+        if (!$this->validateUserExistsWithClerk($userId)) {
+            return response()->json(['error' => 'Unauthorized.'], 500);
         }
 
         try {
@@ -217,7 +223,7 @@ class UserMealController extends Controller
                 'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
 
-            $recipe = $this->userMealService->updateRecipe($id, $validated, $authId);
+            $recipe = $this->userMealService->updateRecipe($id, $validated, $userId);
             return response()->json($recipe);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -227,12 +233,16 @@ class UserMealController extends Controller
 
     public function toggleStatus(Request $request, $id): JsonResponse
     {
-        $authId = $request->header('X-User-ID');
-        if (!$authId) {
-            return response()->json(['error' => 'User ID required'], 400);
+        $userData = json_decode($request->header('X-User-Data'), true);
+        if (!$userData || !isset($userData['id'])) {
+            return response()->json(['error' => 'User data not provided.'], 401);
+        }
+        $userId = $userData['id'];
+        if (!$this->validateUserExistsWithClerk($userId)) {
+            return response()->json(['error' => 'Unauthorized.'], 500);
         }
         try {
-            $this->userMealService->toggleStatus($authId, $id);
+            $this->userMealService->toggleStatus($userId, $id);
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to toggle status'], 500);
@@ -242,12 +252,16 @@ class UserMealController extends Controller
     public function addFromRecipe(Request $request, $id): JsonResponse
     {
         try {
-            $authId = $request->header('X-User-ID');
-            if (!$authId) {
-                return response()->json(['error' => 'User ID required'], 400);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+            $userId = $userData['id'];
+            if (!$this->validateUserExistsWithClerk($userId)) {
+                return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
-            $userMeal = $this->userMealService->addFromRecipe($authId, $id);
+            $userMeal = $this->userMealService->addFromRecipe($userId, $id);
             return response()->json($userMeal, 201);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -258,12 +272,16 @@ class UserMealController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         try {
-            $authId = $request->header('X-User-ID');
-            if (!$authId) {
-                return response()->json(['error' => 'User ID required'], 400);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+            $userId = $userData['id'];
+            if (!$this->validateUserExistsWithClerk($userId)) {
+                return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
-            $this->userMealService->deleteMeal($authId, $id);
+            $this->userMealService->deleteMeal($userId, $id);
             return response()->json(['message' => 'Meal deleted successfully']);
         } catch (\Exception $e) {
             Log::error($e->getMessage());

@@ -19,15 +19,14 @@ class IngredientController extends Controller
         // Handle search
         if ($request->has('search') && !empty($request->search)) {
             $searchTerm = $request->search;
-            $query->where('name', 'like', "%{$searchTerm}%")
-                  ->orWhere('abbreviation', 'like', "%{$searchTerm}%");
+            $query->where('name', 'like', "%{$searchTerm}%");
         }
 
         // Handle sorting
         $sortField = $request->get('sort_field', 'name');
         $sortDirection = $request->get('sort_direction', 'asc');
 
-        if (in_array($sortField, ['id', 'name', 'abbreviation', 'created_at', 'updated_at'])) {
+        if (in_array($sortField, ['id', 'name', 'created_at', 'updated_at'])) {
             $query->orderBy($sortField, $sortDirection);
         } else {
             $query->orderBy('name', 'asc'); // Default fallback
