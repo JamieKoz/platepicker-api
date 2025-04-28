@@ -22,12 +22,13 @@ class TallyController extends Controller
     public function getFavourites(Request $request)
     {
         try {
-            $authId = $request->header('X-User-ID');
-            if (!$authId) {
-                return response()->json(['error' => 'User ID required'], 400);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            $talliedRecipes = $this->tallyService->getFavourites($authId);
+            $userId = $userData['id'];
+            $talliedRecipes = $this->tallyService->getFavourites($userId);
             return response()->json($talliedRecipes);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getTraceAsString()], 500);
@@ -57,12 +58,14 @@ class TallyController extends Controller
     public function incrementTally(Request $request, $id): JsonResponse
     {
         try {
-            $authId = $request->header('X-User-ID');
-            if (!$authId) {
-                return response()->json(['error' => 'User ID required'], 200);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            $this->tallyService->incrementMealTally($authId, $id);
+            $userId = $userData['id'];
+
+            $this->tallyService->incrementMealTally($userId, $id);
             return response()->json(['message' => 'Tally incremented successfully']);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
