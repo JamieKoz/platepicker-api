@@ -24,10 +24,8 @@ class Recipe extends Model
      */
     protected $fillable = [
         'title',
-        //'ingredients',
         'instructions',
         'image_name',
-        //'cleaned_ingredients',
         'serves',
         'cooking_time',
         'active',

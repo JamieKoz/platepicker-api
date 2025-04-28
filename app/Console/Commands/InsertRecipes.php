@@ -73,7 +73,6 @@ class InsertRecipes extends Command
                 'ingredients' => json_encode($record['Ingredients']),
                 'instructions' => $record['Instructions'],
                 'image_name' => $record['Image_Name'],
-                'cleaned_ingredients' => json_encode($record['Cleaned_Ingredients']),
             ]);
         }
 

@@ -19,7 +19,6 @@ class UserMeal extends Model
         'title',
         'instructions',
         'image_name',
-        'cleaned_ingredients',
         'serves',
         'cooking_time',
     ];

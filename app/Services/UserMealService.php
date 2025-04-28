@@ -122,7 +122,6 @@ class UserMealService
         $userMeal->user_id = $authId;
         $userMeal->title = $data['title'];
         $userMeal->instructions = $data['instructions'];
-        $userMeal->cleaned_ingredients = $data['ingredients'];
         $userMeal->cooking_time = $data['cooking_time'];
         $userMeal->serves = $data['serves'];
         $userMeal->active = true;
@@ -169,7 +168,6 @@ class UserMealService
         $userMeal->fill([
             'title' => $data['title'],
             'instructions' => $data['instructions'] ?? $userMeal->instructions,
-            'cleaned_ingredients' => $data['ingredients'] ?? $userMeal->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $userMeal->cooking_time,
             'serves' => $data['serves'] ?? $userMeal->serves,
         ]);
@@ -288,10 +286,8 @@ class UserMealService
             'user_id' => $authId,
             'recipe_id' => $recipe->id,
             'title' => $recipe->title,
-            'ingredients' => $recipe->ingredients,
             'instructions' => $recipe->instructions,
             'image_name' => $recipe->image_name,
-            'cleaned_ingredients' => $recipe->cleaned_ingredients,
             'cooking_time' => $recipe->cooking_time,
             'serves' => $recipe->serves,
             'active' => true
