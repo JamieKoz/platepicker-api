@@ -49,7 +49,7 @@ class IngredientController extends Controller
         // Handle search term
         if ($request->has('q')) {
             $searchTerm = $request->get('q');
-            $query->where('name', 'like', "%{$searchTerm}%");
+            $query->where('name', 'ilike', "%{$searchTerm}%");
         }
 
         // Handle sorting

@@ -9,6 +9,7 @@ use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\CuisineController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DietaryController;
+use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\IngredientController;
 use App\Http\Controllers\MeasurementController;
 use App\Http\Controllers\UserController;
@@ -88,3 +89,6 @@ Route::post('/ingredients', [IngredientController::class, 'store']);
 Route::get('/ingredients/{id}', [IngredientController::class, 'show']);
 Route::put('/ingredients/{id}', [IngredientController::class, 'update']);
 Route::delete('/ingredients/{id}', [IngredientController::class, 'destroy']);
+
+// Feedback routes
+Route::post('/feedback', [FeedbackController::class, 'index']);
