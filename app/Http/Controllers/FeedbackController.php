@@ -1,4 +1,3 @@
-
 <?php
 
 namespace App\Http\Controllers;
@@ -43,7 +42,7 @@ class FeedbackController extends Controller
                 'status' => 'success',
                 'message' => 'Feedback submitted successfully'
             ], 200);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Log error
             Log::error('Failed to process feedback', [
                 'error' => $e->getMessage(),
@@ -53,7 +52,7 @@ class FeedbackController extends Controller
             // Return error response
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to process feedback'
+                'message' => $e->getMessage()
             ], 500);
         }
     }

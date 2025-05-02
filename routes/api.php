@@ -91,4 +91,4 @@ Route::put('/ingredients/{id}', [IngredientController::class, 'update']);
 Route::delete('/ingredients/{id}', [IngredientController::class, 'destroy']);
 
 // Feedback routes
-Route::post('/feedback', [FeedbackController::class, 'index']);
+Route::post('/feedback', [FeedbackController::class, 'submit']);
