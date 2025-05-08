@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\UserMealService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -20,8 +19,10 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
-        'auth_id',
         'password',
+        'auth_id',
+        'is_admin',
+        'is_active'
     ];
 
     /**

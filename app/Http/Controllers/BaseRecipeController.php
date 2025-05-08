@@ -29,11 +29,11 @@ class BaseRecipeController extends Controller
 
     public function assignInitialMealsToUser(Request $request)
     {
-        if (empty($request->header('X-User-ID'))) {
-            return response()->json(['error' => 'Unauthorized.'], 500);
+        $userId = null;
+        $userData = json_decode($request->header('X-User-Data'), true);
+        if ($userData && isset($userData['id'])) {
+            $userId = $userData['id'];
         }
-
-        $userId = $request->header('X-User-ID');
         $this->baseRecipeService->assignInitialMealsToUser($userId);
         return response()->json(['success' => 'Assigned Recipes to new user.'], 200);
     }

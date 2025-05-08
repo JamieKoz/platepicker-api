@@ -95,3 +95,6 @@ Route::post('/feedback', [FeedbackController::class, 'submit']);
 Route::get('/feedback', [FeedbackController::class, 'index']);
 Route::get('/feedback/{id}', [FeedbackController::class, 'show']);
 Route::put('/feedback/{id}', [FeedbackController::class, 'update']);
+
+// routes/api.php
+Route::post('/users/register-clerk-user', [UserController::class, 'store']);
