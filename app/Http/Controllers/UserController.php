@@ -26,22 +26,17 @@ class UserController extends Controller
             $user->update([
                 'name' => $request->name,
                 'email' => $request->email,
-                // Don't need to update imageUrl as it's not in your schema
             ]);
         } else {
             // Create new user
-            $user = User::create([
-                'auth_id' => $request->id,
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make(Str::random(24)),
-                'is_active' => 1,
-                'is_admin' => 0
-            ]);
-            if ($request->has('isAdmin')) {
-                $user->is_admin = $request->isAdmin ? 1 : 0;
-                $user->save();
-            }
+            $user = new User();
+            $user->auth_id = $request->clerkId;
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->password = Hash::make(Str::random(24));
+            $user->is_active = 1;
+            $user->is_admin = $request->has('isAdmin') ? ($request->isAdmin ? 1 : 0) : 0;
+            $user->save();
         }
 
         return response()->json([
