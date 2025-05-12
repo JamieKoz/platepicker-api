@@ -17,32 +17,21 @@ class BaseRecipeService
 {
     public function assignInitialMealsToUser(string $userId): void
     {
-        // Get 30 random active recipes
         $defaultRecipes = Recipe::where('active', 1)
-            ->inRandomOrder()
             ->take(30)
             ->get();
 
         foreach ($defaultRecipes as $recipe) {
-            // Get related data
-            $categoryNames = $recipe->categories()->pluck('name')->implode(', ');
-            $cuisineNames = $recipe->cuisines()->pluck('name')->implode(', ');
-            $dietaryNames = $recipe->dietary()->pluck('name')->implode(', ');
 
-            UserMeal::create([
+            UserMeal::firstOrCreate([
                 'user_id' => $userId,
                 'recipe_id' => $recipe->id,
                 'active' => true,
                 'title' => $recipe->title,
-                //'ingredients' => $recipe->ingredients,
                 'instructions' => $recipe->instructions,
                 'image_name' => $recipe->image_name,
                 'cooking_time' => $recipe->cooking_time,
                 'serves' => $recipe->serves,
-                'dietary' => $dietaryNames,
-                'cuisine' => $cuisineNames,
-                'category' => $categoryNames,
-                //'cleaned_ingredients' => $recipe->cleaned_ingredients
             ]);
         }
     }
@@ -51,9 +40,7 @@ class BaseRecipeService
     {
         $recipe = new Recipe();
         $recipe->title = $data['title'];
-        //$recipe->ingredients = $data['ingredients'];
         $recipe->instructions = $data['instructions'];
-        //$recipe->cleaned_ingredients = $data['ingredients'];
         $recipe->cooking_time = $data['cooking_time'];
         $recipe->serves = $data['serves'];
         $recipe->active = true;
@@ -97,9 +84,7 @@ class BaseRecipeService
 
         $recipe->fill([
             'title' => $data['title'],
-            //'ingredients' => $data['ingredients'] ?? $recipe->ingredients,
             'instructions' => $data['instructions'] ?? $recipe->instructions,
-            //'cleaned_ingredients' => $data['ingredients'] ?? $recipe->cleaned_ingredients,
             'cooking_time' => $data['cooking_time'] ?? $recipe->cooking_time,
             'serves' => $data['serves'] ?? $recipe->serves,
         ]);
