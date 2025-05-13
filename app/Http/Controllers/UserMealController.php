@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\UserMealService;
 use App\Services\TallyService;
 use App\Services\UserService;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class UserMealController extends Controller
@@ -15,34 +15,18 @@ class UserMealController extends Controller
     protected $userMealService;
     protected $userService;
     protected $tallyService;
-    protected $apiKey;
-    protected $clerkUrl;
 
     public function __construct(UserMealService $userMealService, UserService $userService, TallyService $tallyService)
     {
         $this->userMealService = $userMealService;
         $this->userService = $userService;
         $this->tallyService = $tallyService;
-
-        $this->apiKey = env('CLERK_API_KEY');
-        $this->clerkUrl = env('CLERK_API_URL', 'https://api.clerk.com/v1');
     }
 
-    public function validateUserExistsWithClerk($userId): bool
+    public function validateUserExists($userId)
     {
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->apiKey,
-            'Content-Type' => 'application/json',
-        ])->get($this->clerkUrl . '/users/' . $userId . '/organization_memberships');
-
-        if ($response->successful()) {
-            $data = $response->json();
-            if (!empty($data['data'])) {
-                return true;
-            }
-        }
-
-        return false;
+        $user = User::where('auth_id', $userId)->first();
+        return $user !== null;
     }
 
     public function getRecipe(Request $request)
@@ -59,7 +43,7 @@ class UserMealController extends Controller
         $maxCookingTime = $request->query('cooking_time');
 
         if (!empty($userId)) {
-            if (!$this->validateUserExistsWithClerk($userData['id'])) {
+            if (!$this->validateUserExists($userData['id'])) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -98,7 +82,7 @@ class UserMealController extends Controller
             return response()->json(['error' => 'User data not provided.'], 401);
         }
         $userId = $userData['id'];
-        if (!$this->validateUserExistsWithClerk($userData['id'])) {
+        if (!$this->validateUserExists($userData['id'])) {
             return response()->json(['error' => 'Unauthorized.'], 500);
         }
 
@@ -117,7 +101,7 @@ class UserMealController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
             $userId = $userData['id'];
-            if (!$this->validateUserExistsWithClerk($userData['id'])) {
+            if (!$this->validateUserExists($userData['id'])) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -155,7 +139,7 @@ class UserMealController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
             $userId = $userData['id'];
-            if (!$this->validateUserExistsWithClerk($userData['id'])) {
+            if (!$this->validateUserExists($userData['id'])) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -196,7 +180,7 @@ class UserMealController extends Controller
             return response()->json(['error' => 'User data not provided.'], 401);
         }
         $userId = $userData['id'];
-        if (!$this->validateUserExistsWithClerk($userId)) {
+        if (!$this->validateUserExists($userId)) {
             return response()->json(['error' => 'Unauthorized.'], 500);
         }
 
@@ -238,7 +222,7 @@ class UserMealController extends Controller
             return response()->json(['error' => 'User data not provided.'], 401);
         }
         $userId = $userData['id'];
-        if (!$this->validateUserExistsWithClerk($userId)) {
+        if (!$this->validateUserExists($userId)) {
             return response()->json(['error' => 'Unauthorized.'], 500);
         }
         try {
@@ -257,7 +241,7 @@ class UserMealController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
             $userId = $userData['id'];
-            if (!$this->validateUserExistsWithClerk($userId)) {
+            if (!$this->validateUserExists($userId)) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
@@ -277,7 +261,7 @@ class UserMealController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
             $userId = $userData['id'];
-            if (!$this->validateUserExistsWithClerk($userId)) {
+            if (!$this->validateUserExists($userId)) {
                 return response()->json(['error' => 'Unauthorized.'], 500);
             }
 
