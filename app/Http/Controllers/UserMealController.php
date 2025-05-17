@@ -49,8 +49,8 @@ class UserMealController extends Controller
 
             // Pass filter parameters to service method
             $recipes = $this->userMealService->getRandomRecipesActive(
-                27,
                 $userId,
+                27,
                 $categoryFilter,
                 $cuisineFilter,
                 $dietaryFilter,

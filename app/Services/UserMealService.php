@@ -62,7 +62,7 @@ class UserMealService
         return $recipes;
     }
 
-    public function getRandomRecipesActive($count = 27, $authId, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
+    public function getRandomRecipesActive($authId, $count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
         $query = UserMeal::with([
             'categories',

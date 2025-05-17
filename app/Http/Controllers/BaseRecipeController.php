@@ -8,6 +8,7 @@ use App\Services\UserService;
 use App\Services\BaseRecipeService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class BaseRecipeController extends Controller
 {
@@ -153,7 +154,7 @@ class BaseRecipeController extends Controller
                 'categories.*' => 'exists:categories,id',
                 'cuisines' => 'nullable|array',
                 'cuisines.*' => 'exists:cuisines,id',
-                'dietary' => 'nullable|array',
+                'dietary' => 'nullable|array|max:3',
                 'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean',
@@ -167,6 +168,8 @@ class BaseRecipeController extends Controller
             ]);
             $recipe = $this->baseRecipeService->updateRecipe($id, $validated);
             return response()->json($recipe);
+        } catch (ValidationException $e) {
+            return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
             return response()->json(['error' => 'Failed to update meal.'], 500);
@@ -269,7 +272,7 @@ class BaseRecipeController extends Controller
                 'categories.*' => 'exists:categories,id',
                 'cuisines' => 'nullable|array',
                 'cuisines.*' => 'exists:cuisines,id',
-                'dietary' => 'nullable|array',
+                'dietary' => 'nullable|array|max:3',
                 'dietary.*' => 'exists:dietary,id',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
                 'active' => 'nullable|boolean',
@@ -284,9 +287,11 @@ class BaseRecipeController extends Controller
 
             $recipe = $this->baseRecipeService->createRecipe($validated);
             return response()->json($recipe, 201);
+        } catch (ValidationException $e) {
+            return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            return response()->json(['error' => 'Failed to create recipe'], 500);
+            return response()->json(['error' => 'Failed to update meal.'], 500);
         }
     }
 }
