@@ -785,4 +785,15 @@ class BaseRecipeService
         // in the migration files
         $recipe->delete();
     }
+
+    public function showMeal($mealId)
+    {
+        return Recipe::with([
+            'categories',
+            'cuisines',
+            'dietary',
+            'recipeLines.ingredient',
+            'recipeLines.measurement'
+        ])->findOrFail($mealId);
+    }
 }

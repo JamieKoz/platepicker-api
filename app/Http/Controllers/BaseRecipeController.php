@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\UserService;
 use App\Services\BaseRecipeService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -292,6 +293,27 @@ class BaseRecipeController extends Controller
         } catch (\Exception $e) {
             Log::error($e->getMessage());
             return response()->json(['error' => 'Failed to update meal.'], 500);
+        }
+    }
+    public function show(Request $request, $id): JsonResponse
+    {
+        try {
+            $recipe = $this->baseRecipeService->showMeal($id);
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id']) || !$this->validateIsAdminWithClerk($userData['id'])) {
+                return response()->json(['error' => 'Recipe not found'], 404);
+            }
+
+            $recipe->recipeLines = $recipe->recipeLines->sortBy('sort_order')->values();
+
+            return response()->json($recipe);
+        } catch (ModelNotFoundException $e) {
+
+            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['error' => 'Recipe not found'], 404);
+        } catch (\Exception $e) {
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'Failed to retrieve recipe'], 500);
         }
     }
 }

@@ -53,6 +53,7 @@ Route::post('/recipes', [BaseRecipeController::class, 'store']);
 Route::post('/recipes/{id}', [BaseRecipeController::class, 'update']);
 Route::get('/recipes/group-values', [BaseRecipeController::class, 'getGroupValues']);
 Route::post('/users/assign-initial-recipes', [BaseRecipeController::class, 'assignInitialMealsToUser']);
+Route::get('/recipes/{id}', [BaseRecipeController::class, 'show']);
 
 // Category routes
 Route::get('/categories', [CategoryController::class, 'index']);
