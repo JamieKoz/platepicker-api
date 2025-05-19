@@ -912,4 +912,14 @@ public function getRecipeListGrouped(
         return $query->orderBy('title', $titleDirection)->paginate(50);
     }
 
+    public function showMeal($userId, $mealId)
+    {
+        return UserMeal::with([
+            'categories',
+            'cuisines',
+            'dietary',
+            'recipeLines.ingredient',
+            'recipeLines.measurement'
+        ])->where('user_id', $userId)->findOrFail($mealId);
+    }
 }

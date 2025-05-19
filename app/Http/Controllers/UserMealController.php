@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Services\UserMealService;
 use App\Services\TallyService;
 use App\Services\UserService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Log;
 
 class UserMealController extends Controller
@@ -270,6 +271,32 @@ class UserMealController extends Controller
         } catch (\Exception $e) {
             Log::error($e->getMessage());
             return response()->json(['error' => 'Failed to delete meal'], 500);
+        }
+    }
+
+    public function show(Request $request, $id): JsonResponse
+    {
+        try {
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+            $userId = $userData['id'];
+            if (!$this->validateUserExists($userId)) {
+                return response()->json(['error' => 'Unauthorized.'], 500);
+            }
+
+            $recipe = $this->userMealService->showMeal($userId, $id);
+            $recipe->recipeLines = $recipe->recipeLines->sortBy('sort_order')->values();
+
+            return response()->json($recipe);
+        } catch (ModelNotFoundException $e) {
+
+            return response()->json(['error' => $e->getMessage()], 404);
+            return response()->json(['error' => 'Recipe not found'], 404);
+        } catch (\Exception $e) {
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'Failed to retrieve recipe'], 500);
         }
     }
 }

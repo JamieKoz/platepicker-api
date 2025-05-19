@@ -30,6 +30,7 @@ Route::get('/user-meals/search', [UserMealController::class, 'search']);
 Route::post('/user-meals', [UserMealController::class, 'store']);
 Route::post('/user-meals/{id}', [UserMealController::class, 'update']);
 Route::post('/user-meals/{id}/toggle-status', [UserMealController::class, 'toggleStatus']);
+Route::get('/user-meals/{id}', [UserMealController::class, 'show']);
 
 Route::post('/user-meals/add-from-recipe/{id}', [UserMealController::class, 'addFromRecipe']);
 Route::delete('/user-meals/{id}', [UserMealController::class, 'destroy']);
