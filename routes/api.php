@@ -24,6 +24,8 @@ use App\Http\Controllers\UserController;
 |
 */
 
+Route::get('/user-meals/favourites', [TallyController::class, 'getFavourites']);
+Route::get('/user-meals/top-meals', [TallyController::class, 'getTopMeals']);
 Route::get('/recipe', [UserMealController::class, 'getRecipe']);
 Route::get('/user-meals/list', [UserMealController::class, 'getList']);
 Route::get('/user-meals/search', [UserMealController::class, 'search']);
@@ -35,9 +37,6 @@ Route::get('/user-meals/{id}', [UserMealController::class, 'show']);
 Route::post('/user-meals/add-from-recipe/{id}', [UserMealController::class, 'addFromRecipe']);
 Route::delete('/user-meals/{id}', [UserMealController::class, 'destroy']);
 Route::post('/user-meals/{id}/increment-tally', [TallyController::class, 'incrementTally']);
-
-Route::get('/user-meals/favourites', [TallyController::class, 'getFavourites']);
-Route::get('/user-meals/top-meals', [TallyController::class, 'getTopMeals']);
 
 Route::get('/restaurants/nearby', [RestaurantController::class, 'getNearbyRestaurants']);
 Route::get('/restaurants/address-suggestions', [RestaurantController::class, 'getAddressSuggestions']);

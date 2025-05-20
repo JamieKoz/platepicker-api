@@ -17,22 +17,25 @@ class BaseRecipeService
 {
     public function assignInitialMealsToUser(string $userId): void
     {
-        $defaultRecipes = Recipe::where('active', 1)
-            ->take(30)
-            ->get();
+        $existingMeals = UserMeal::where('user_id', $userId)->exists();
 
-        foreach ($defaultRecipes as $recipe) {
-
-            UserMeal::firstOrCreate([
-                'user_id' => $userId,
-                'recipe_id' => $recipe->id,
-                'active' => true,
-                'title' => $recipe->title,
-                'instructions' => $recipe->instructions,
-                'image_name' => $recipe->image_name,
-                'cooking_time' => $recipe->cooking_time,
-                'serves' => $recipe->serves,
-            ]);
+        // Only assign meals if the user doesn't have any yet
+        if (!$existingMeals) {
+            $defaultRecipes = Recipe::where('active', 1)
+                ->take(30)
+                ->get();
+            foreach ($defaultRecipes as $recipe) {
+                UserMeal::firstOrCreate([
+                    'user_id' => $userId,
+                    'recipe_id' => $recipe->id,
+                    'active' => true,
+                    'title' => $recipe->title,
+                    'instructions' => $recipe->instructions,
+                    'image_name' => $recipe->image_name,
+                    'cooking_time' => $recipe->cooking_time,
+                    'serves' => $recipe->serves,
+                ]);
+            }
         }
     }
 
