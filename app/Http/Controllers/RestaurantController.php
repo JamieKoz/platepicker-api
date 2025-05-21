@@ -11,8 +11,6 @@ class RestaurantController extends Controller
 {
     private $restaurantService;
     private const CACHE_DURATION = 86400; // 24 hours
-    private const PHOTOS_CACHE_DURATION = 86400; // 24 hours
-    private const MAX_PHOTOS = 5; // Maximum photos to return
 
     public function __construct(RestaurantService $restaurantService)
     {
@@ -40,7 +38,7 @@ class RestaurantController extends Controller
         return response()->json($results);
     }
 
-          public function getNearbyRestaurants(Request $request)
+    public function getNearbyRestaurants(Request $request)
     {
         $placeId = $request->query('place_id');
         $diningOption = $request->query('dining_option', 'delivery'); // Default to delivery
@@ -79,7 +77,7 @@ class RestaurantController extends Controller
 
             // Add a flag to indicate if the restaurant has photos
             $processedRestaurant['has_additional_photos'] =
-                isset($restaurant['photos']) && !empty($restaurant['photos']);
+            isset($restaurant['photos']) && !empty($restaurant['photos']);
 
             // Include only the primary photo for immediate display
             if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {
@@ -131,7 +129,7 @@ class RestaurantController extends Controller
 
             // Add a flag to indicate if the restaurant has photos
             $processedRestaurant['has_additional_photos'] =
-                isset($restaurant['photos']) && !empty($restaurant['photos']);
+            isset($restaurant['photos']) && !empty($restaurant['photos']);
 
             // Include only the primary photo for immediate display
             if (isset($restaurant['photos']) && !empty($restaurant['photos'])) {

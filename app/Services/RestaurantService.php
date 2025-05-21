@@ -194,7 +194,12 @@ class RestaurantService
 
         // Determine keywords based on dining option
         $keyword = 'opennow';
+        $searchType = 'restaurant';
         switch ($diningOption) {
+            case 'bars':
+                $keyword = 'bar, pub, alcohol, opennow';
+                $searchType = 'bar';
+                break;
             case 'dine_in':
                 $keyword = 'food, fastfood, reservable, cafe, opennow';
                 break;
@@ -212,7 +217,7 @@ class RestaurantService
 
         $params = [
             'location' => "{$lat},{$lng}",
-            'type' => 'restaurant',
+            'type' => $searchType,
             'rankby' => 'distance',
             'keyword' => $keyword,
             'key' => config('services.google.maps_api_key')

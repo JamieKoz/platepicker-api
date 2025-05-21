@@ -277,16 +277,7 @@ class UserMealController extends Controller
     public function show(Request $request, $id): JsonResponse
     {
         try {
-            $userData = json_decode($request->header('X-User-Data'), true);
-            if (!$userData || !isset($userData['id'])) {
-                return response()->json(['error' => 'User data not provided.'], 401);
-            }
-            $userId = $userData['id'];
-            if (!$this->validateUserExists($userId)) {
-                return response()->json(['error' => 'Unauthorized.'], 500);
-            }
-
-            $recipe = $this->userMealService->showMeal($userId, $id);
+            $recipe = $this->userMealService->showMeal($id);
             $recipe->recipeLines = $recipe->recipeLines->sortBy('sort_order')->values();
 
             return response()->json($recipe);

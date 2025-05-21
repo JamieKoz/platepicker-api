@@ -912,7 +912,7 @@ public function getRecipeListGrouped(
         return $query->orderBy('title', $titleDirection)->paginate(50);
     }
 
-    public function showMeal($userId, $mealId)
+    public function showMeal($mealId)
     {
         return UserMeal::with([
             'categories',
@@ -920,6 +920,6 @@ public function getRecipeListGrouped(
             'dietary',
             'recipeLines.ingredient',
             'recipeLines.measurement'
-        ])->where('user_id', $userId)->findOrFail($mealId);
+        ])->findOrFail($mealId);
     }
 }
