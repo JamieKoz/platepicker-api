@@ -183,106 +183,67 @@ class BaseRecipeService
     /**
      * Get recipe list with optional grouping and pagination
      */
-    public function getRecipeListGrouped(
+        public function getRecipeListGrouped(
         string $groupBy = 'none',
         string $activeDirection = 'desc',
         string $titleDirection = 'asc',
         int $page = 1,
+        ?string $searchTerm = null
     ): array {
         // If no grouping requested, use the standard pagination method
         if ($groupBy === 'none') {
-            $paginator = $this->getRecipeList($activeDirection, $titleDirection);
-            return [
-                'data' => $paginator->items(),
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-                'prev_page_url' => $paginator->previousPageUrl(),
-                'next_page_url' => $paginator->nextPageUrl(),
-            ];
+            $paginator = $searchTerm
+                ? $this->search($searchTerm, $activeDirection, $titleDirection)
+                : $this->getRecipeList($activeDirection, $titleDirection);
+
+            return $this->formatStandardPagination($paginator);
         }
 
-        // For grouping, we need a different approach
-        // First, get the list of groups and count of recipes in each group
-        $groups = $this->getGroupsWithCounts($groupBy);
+        // Get groups with counts (filtered by search if applicable)
+        $groups = $this->getGroupsWithCounts($groupBy, $searchTerm);
 
-        // Calculate total groups and set up pagination for groups
-        $totalGroups = count($groups);
-        $groupsPerPage = 5; // Show 5 groups per page
-        $totalPages = ceil($totalGroups / $groupsPerPage);
-        $currentPage = min(max(1, $page), max(1, $totalPages));
+        // Set up pagination for groups
+        $groupsPerPage = 5;
+        $paginationData = $this->calculateGroupPagination($groups, $page, $groupsPerPage);
 
-        // Paginate the groups
-        $paginatedGroups = array_slice($groups, ($currentPage - 1) * $groupsPerPage, $groupsPerPage);
-
-        // For each group in the current page, get its recipes
-        $groupedRecipes = [];
-        foreach ($paginatedGroups as $group) {
-            // Get the ID properly regardless of whether it's an array or object
-            $groupId = is_array($group) ? $group['id'] : $group->id;
-            $groupName = is_array($group) ? $group['name'] : $group->name;
-            $groupCount = is_array($group) ? $group['count'] : $group->count;
-
-            // Get recipes for this group with limited relationships
-            $recipes = $this->getRecipesForGroup(
-                $groupBy,
-                $groupId,
-                $activeDirection,
-                $titleDirection,
-                15 // Limit recipes per group to 15
-            );
-
-            $groupedRecipes[] = [
-                'id' => $groupId,
-                'name' => $groupName,
-                'total_recipes' => $groupCount,
-                'recipes' => $recipes,
-                'has_more' => $groupCount > 15
-            ];
-        }
+        // Get recipes for each group in the current page
+        $groupedRecipes = $this->getRecipesForGroups(
+            $paginationData['paginatedGroups'],
+            $groupBy,
+            $activeDirection,
+            $titleDirection,
+            $searchTerm
+        );
 
         // Generate pagination URLs
-        $prevPageUrl = $currentPage > 1
-            ? url('/api/recipes/list') . '?' . http_build_query([
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage - 1
-            ])
-            : null;
+        $baseUrl = $searchTerm ? '/api/recipes/search' : '/api/recipes/list';
+        $urlParams = [
+            'group_by' => $groupBy,
+            'active_direction' => $activeDirection,
+            'title_direction' => $titleDirection,
+        ];
 
-        $nextPageUrl = $currentPage < $totalPages
-            ? url('/api/recipes/list') . '?' . http_build_query([
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage + 1
-            ])
-            : null;
+        if ($searchTerm) {
+            $urlParams['q'] = $searchTerm;
+        }
 
-        // Return the grouped data with pagination info
+        $paginationUrls = $this->generatePaginationUrls(
+            $baseUrl,
+            $urlParams,
+            $paginationData['currentPage'],
+            $paginationData['totalPages']
+        );
+
         return [
             'grouped' => true,
             'group_by' => $groupBy,
             'groups' => $groupedRecipes,
-            'pagination' => [
-                'current_page' => $currentPage,
-                'last_page' => $totalPages,
-                'per_page' => $groupsPerPage,
-                'total_groups' => $totalGroups,
-                'from' => (($currentPage - 1) * $groupsPerPage) + 1,
-                'to' => min($currentPage * $groupsPerPage, $totalGroups),
-                'prev_page_url' => $prevPageUrl,
-                'next_page_url' => $nextPageUrl,
-            ]
+            'pagination' => array_merge($paginationData['pagination'], $paginationUrls)
         ];
     }
 
     /**
-     * Search recipes with optional grouping
+     * Search recipes with optional grouping (wrapper for backward compatibility)
      */
     public function searchGrouped(
         $searchTerm,
@@ -292,90 +253,141 @@ class BaseRecipeService
         int $page = 1,
         int $perPage = 10
     ): array {
-        // If no grouping requested, use the standard search method
-        if ($groupBy === 'none') {
-            $paginator = $this->search($searchTerm, $activeDirection, $titleDirection);
-            return [
-                'data' => $paginator->items(),
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-                'prev_page_url' => $paginator->previousPageUrl(),
-                'next_page_url' => $paginator->nextPageUrl(),
+        return $this->getRecipeListGrouped(
+            $groupBy,
+            $activeDirection,
+            $titleDirection,
+            $page,
+            $searchTerm
+        );
+    }
+
+    /**
+     * Get list of groups with recipe counts
+     */
+    private function getGroupsWithCounts(string $groupBy, ?string $searchTerm = null): array
+    {
+        $recipeIds = null;
+
+        // If searching, get matching recipe IDs first
+        if ($searchTerm) {
+            $recipeIds = DB::table('recipes')
+                ->where('title', 'ilike', '%' . $searchTerm . '%')
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($recipeIds)) {
+                return [];
+            }
+        }
+
+        $config = $this->getGroupConfig($groupBy);
+        if (!$config) {
+            return [];
+        }
+
+        // Get groups with counts
+        $query = DB::table($config['table'])
+            ->select(
+                $config['table'] . '.id',
+                $config['table'] . '.name',
+                DB::raw('COUNT(DISTINCT ' . $config['pivot_table'] . '.' . $config['recipe_column'] . ') as count')
+            );
+
+        if ($searchTerm && !empty($recipeIds)) {
+            // For search, use INNER JOIN and filter by recipe IDs
+            $query->join($config['pivot_table'], $config['table'] . '.id', '=', $config['pivot_table'] . '.' . $config['foreign_column'])
+                  ->whereIn($config['pivot_table'] . '.' . $config['recipe_column'], $recipeIds);
+        } else {
+            // For regular listing, use LEFT JOIN
+            $query->leftJoin($config['pivot_table'], $config['table'] . '.id', '=', $config['pivot_table'] . '.' . $config['foreign_column']);
+        }
+
+        $groups = $query->groupBy($config['table'] . '.id', $config['table'] . '.name')
+                       ->orderBy($config['table'] . '.name')
+                       ->get()
+                       ->toArray();
+
+        // Add uncategorized count
+        $uncategorizedCount = $this->getUncategorizedCount($config, $recipeIds);
+
+        if ($uncategorizedCount > 0) {
+            $groups[] = [
+                'id' => 0,
+                'name' => 'Uncategorized',
+                'count' => $uncategorizedCount
             ];
         }
 
-        // For search with grouping, we need to first find matching recipes
-        /* $query = Recipe::where('title', 'LIKE', '%' . $searchTerm . '%'); */
-        $query = DB::table('recipes')->where('title', 'LIKE', '%' . $searchTerm . '%');
+        return array_values($groups);
+    }
 
-        // Get groups that have recipes matching the search
-        $groups = $this->getGroupsWithCountsForSearch($groupBy, $query);
+    /**
+     * Get configuration for different group types
+     */
+    private function getGroupConfig(string $groupBy): ?array
+    {
+        $configs = [
+            'cuisine' => [
+                'table' => 'cuisines',
+                'pivot_table' => 'recipes_cuisine',
+                'foreign_column' => 'cuisine_id',
+                'recipe_column' => 'recipe_id',
+                'relationship' => 'cuisines'
+            ],
+            'category' => [
+                'table' => 'categories',
+                'pivot_table' => 'recipe_categories',
+                'foreign_column' => 'category_id',
+                'recipe_column' => 'recipe_id',
+                'relationship' => 'categories'
+            ],
+            'dietary' => [
+                'table' => 'dietary',
+                'pivot_table' => 'recipes_dietary',
+                'foreign_column' => 'dietary_id',
+                'recipe_column' => 'recipe_id',
+                'relationship' => 'dietary'
+            ]
+        ];
 
-        // Calculate total groups and set up pagination for groups
+        return $configs[$groupBy] ?? null;
+    }
+
+    /**
+     * Get count of uncategorized recipes
+     */
+    private function getUncategorizedCount(array $config, ?array $recipeIds = null): int
+    {
+        $query = DB::table('recipes')
+            ->whereNotExists(function ($subQuery) use ($config) {
+                $subQuery->select(DB::raw(1))
+                        ->from($config['pivot_table'])
+                        ->whereRaw('recipes.id = ' . $config['pivot_table'] . '.' . $config['recipe_column']);
+            });
+
+        if ($recipeIds) {
+            $query->whereIn('recipes.id', $recipeIds);
+        }
+
+        return $query->count();
+    }
+
+    /**
+     * Calculate pagination data for groups
+     */
+    private function calculateGroupPagination(array $groups, int $page, int $groupsPerPage): array
+    {
         $totalGroups = count($groups);
-        $groupsPerPage = 5; // Show 5 groups per page
         $totalPages = ceil($totalGroups / $groupsPerPage);
         $currentPage = min(max(1, $page), max(1, $totalPages));
 
-        // Paginate the groups
         $paginatedGroups = array_slice($groups, ($currentPage - 1) * $groupsPerPage, $groupsPerPage);
 
-        // For each group in the current page, get its recipes that match the search
-        $groupedRecipes = [];
-        foreach ($paginatedGroups as $group) {
-            // Get the ID properly regardless of whether it's an array or object
-            $groupId = is_array($group) ? $group['id'] : $group->id;
-            $groupName = is_array($group) ? $group['name'] : $group->name;
-            $groupCount = is_array($group) ? $group['count'] : $group->count;
-
-            // Get recipes for this group with limited relationships
-            $recipes = $this->getRecipesForGroupSearch(
-                $groupBy,
-                $groupId,
-                $activeDirection,
-                $titleDirection,
-                15 // Limit recipes per group to 15
-            );
-
-            $groupedRecipes[] = [
-                'id' => $groupId,
-                'name' => $groupName,
-                'total_recipes' => $groupCount,
-                'recipes' => $recipes,
-                'has_more' => $groupCount > 15
-            ];
-        }
-
-        // Generate pagination URLs
-        $prevPageUrl = $currentPage > 1
-            ? url('/api/recipes/search') . '?' . http_build_query([
-                'q' => $searchTerm,
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage - 1
-            ])
-            : null;
-
-        $nextPageUrl = $currentPage < $totalPages
-            ? url('/api/recipes/search') . '?' . http_build_query([
-                'q' => $searchTerm,
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage + 1
-            ])
-            : null;
-
-        // Return the grouped data with pagination info
         return [
-            'grouped' => true,
-            'group_by' => $groupBy,
-            'groups' => $groupedRecipes,
+            'paginatedGroups' => $paginatedGroups,
+            'currentPage' => $currentPage,
+            'totalPages' => $totalPages,
             'pagination' => [
                 'current_page' => $currentPage,
                 'last_page' => $totalPages,
@@ -383,338 +395,146 @@ class BaseRecipeService
                 'total_groups' => $totalGroups,
                 'from' => (($currentPage - 1) * $groupsPerPage) + 1,
                 'to' => min($currentPage * $groupsPerPage, $totalGroups),
-                'prev_page_url' => $prevPageUrl,
-                'next_page_url' => $nextPageUrl,
             ]
         ];
     }
 
     /**
-     * Get list of groups with recipe counts
+     * Get recipes for multiple groups
      */
-    private function getGroupsWithCounts(string $groupBy): array
-    {
-        switch ($groupBy) {
-            case 'cuisine':
-                // Get cuisines with recipe counts
-                $groups = DB::table('cuisines')
-                    ->select('cuisines.id', 'cuisines.name', DB::raw('COUNT(DISTINCT recipes_cuisine.recipe_id) as count'))
-                    ->leftJoin('recipes_cuisine', 'cuisines.id', '=', 'recipes_cuisine.cuisine_id')
-                    ->groupBy('cuisines.id', 'cuisines.name')
-                    ->orderBy('cuisines.name')
-                    ->get()
-                    ->toArray();
+    private function getRecipesForGroups(
+        array $groups,
+        string $groupBy,
+        string $activeDirection,
+        string $titleDirection,
+        ?string $searchTerm = null,
+        int $recipesPerGroup = 15
+    ): array {
+        $groupedRecipes = [];
 
-                // Add uncategorized count
-                $uncategorizedCount = DB::table('recipes')
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('recipes_cuisine')
-                            ->whereRaw('recipes.id = recipes_cuisine.recipe_id');
-                    })
-                    ->count();
+        foreach ($groups as $group) {
+            $groupId = is_array($group) ? $group['id'] : $group->id;
+            $groupName = is_array($group) ? $group['name'] : $group->name;
+            $groupCount = is_array($group) ? $group['count'] : $group->count;
 
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
+            $recipes = $this->getRecipesForSingleGroup(
+                $groupBy,
+                $groupId,
+                $activeDirection,
+                $titleDirection,
+                $searchTerm,
+                $recipesPerGroup
+            );
 
-                return array_values($groups);
-
-            case 'category':
-                // Get categories with recipe counts
-                $groups = DB::table('categories')
-                    ->select('categories.id', 'categories.name', DB::raw('COUNT(DISTINCT recipe_categories.recipe_id) as count'))
-                    ->leftJoin('recipe_categories', 'categories.id', '=', 'recipe_categories.category_id')
-                    ->groupBy('categories.id', 'categories.name')
-                    ->orderBy('categories.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count
-                $uncategorizedCount = DB::table('recipes')
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('recipe_categories')
-                            ->whereRaw('recipes.id = recipe_categories.recipe_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            case 'dietary':
-                // Get dietary requirements with recipe counts
-                $groups = DB::table('dietary')
-                    ->select('dietary.id', 'dietary.name', DB::raw('COUNT(DISTINCT recipes_dietary.recipe_id) as count'))
-                    ->leftJoin('recipes_dietary', 'dietary.id', '=', 'recipes_dietary.dietary_id')
-                    ->groupBy('dietary.id', 'dietary.name')
-                    ->orderBy('dietary.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count
-                $uncategorizedCount = DB::table('recipes')
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('recipes_dietary')
-                            ->whereRaw('recipes.id = recipes_dietary.recipe_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            default:
-                return [];
-        }
-    }
-
-    /**
-     * Get list of groups with recipe counts for search
-     */
-    private function getGroupsWithCountsForSearch(string $groupBy, Builder $searchQuery): array
-    {
-        $recipeIds = $searchQuery->pluck('id')->toArray();
-
-        if (empty($recipeIds)) {
-            return [];
+            $groupedRecipes[] = [
+                'id' => $groupId,
+                'name' => $groupName,
+                'total_recipes' => $groupCount,
+                'recipes' => $recipes,
+                'has_more' => $groupCount > $recipesPerGroup
+            ];
         }
 
-        switch ($groupBy) {
-            case 'cuisine':
-                // Get cuisines with recipe counts for matching recipes
-                $groups = DB::table('cuisines')
-                    ->select('cuisines.id', 'cuisines.name', DB::raw('COUNT(DISTINCT recipes_cuisine.recipe_id) as count'))
-                    ->join('recipes_cuisine', 'cuisines.id', '=', 'recipes_cuisine.cuisine_id')
-                    ->whereIn('recipes_cuisine.recipe_id', $recipeIds)
-                    ->groupBy('cuisines.id', 'cuisines.name')
-                    ->orderBy('cuisines.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count for matching recipes
-                $uncategorizedCount = DB::table('recipes')
-                    ->whereIn('recipes.id', $recipeIds)
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('recipes_cuisine')
-                            ->whereRaw('recipes.id = recipes_cuisine.recipe_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-                // Similar implementations for category and dietary
-            case 'category':
-                // Get categories with recipe counts for matching recipes
-                $groups = DB::table('categories')
-                    ->select('categories.id', 'categories.name', DB::raw('COUNT(DISTINCT recipe_categories.recipe_id) as count'))
-                    ->join('recipe_categories', 'categories.id', '=', 'recipe_categories.category_id')
-                    ->whereIn('recipe_categories.recipe_id', $recipeIds)
-                    ->groupBy('categories.id', 'categories.name')
-                    ->orderBy('categories.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count for matching recipes
-                $uncategorizedCount = DB::table('recipes')
-                    ->whereIn('recipes.id', $recipeIds)
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('recipe_categories')
-                            ->whereRaw('recipes.id = recipe_categories.recipe_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            case 'dietary':
-                // Get dietary requirements with recipe counts for matching recipes
-                $groups = DB::table('dietary')
-                    ->select('dietary.id', 'dietary.name', DB::raw('COUNT(DISTINCT recipes_dietary.recipe_id) as count'))
-                    ->join('recipes_dietary', 'dietary.id', '=', 'recipes_dietary.dietary_id')
-                    ->whereIn('recipes_dietary.recipe_id', $recipeIds)
-                    ->groupBy('dietary.id', 'dietary.name')
-                    ->orderBy('dietary.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count for matching recipes
-                $uncategorizedCount = DB::table('recipes')
-                    ->whereIn('recipes.id', $recipeIds)
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('recipes_dietary')
-                            ->whereRaw('recipes.id = recipes_dietary.recipe_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            default:
-                return [];
-        }
+        return $groupedRecipes;
     }
 
     /**
      * Get recipes for a specific group
      */
-    private function getRecipesForGroup(
+    private function getRecipesForSingleGroup(
         string $groupBy,
-        $groupId, // Don't enforce a type here to be flexible
+        $groupId,
         string $activeDirection,
         string $titleDirection,
+        ?string $searchTerm = null,
         int $limit = 15
     ): array {
-        // If the group ID is coming as an array key, access it properly
+        // Normalize group ID
         if (is_array($groupId)) {
             $groupId = $groupId['id'];
         } else if (is_object($groupId)) {
             $groupId = $groupId->id;
         }
-
-        // Ensure it's an integer
         $groupId = (int)$groupId;
 
-        // Rest of your method remains the same
+        // Build base query
         $query = Recipe::with(['categories', 'cuisines', 'dietary'])
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->limit($limit);
 
-        // Filter by the appropriate group
-        if ($groupId === 0) {
-            // Handle the "Uncategorized" case
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereDoesntHave('cuisines');
-                    break;
-                case 'category':
-                    $query->whereDoesntHave('categories');
-                    break;
-                case 'dietary':
-                    $query->whereDoesntHave('dietary');
-                    break;
-            }
-        } else {
-            // Handle specific group
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereHas('cuisines', function ($q) use ($groupId) {
-                        $q->where('cuisines.id', $groupId);
-                    });
-                    break;
-                case 'category':
-                    $query->whereHas('categories', function ($q) use ($groupId) {
-                        $q->where('categories.id', $groupId);
-                    });
-                    break;
-                case 'dietary':
-                    $query->whereHas('dietary', function ($q) use ($groupId) {
-                        $q->where('dietary.id', $groupId);
-                    });
-                    break;
-            }
+        // Add search filter if provided
+        if ($searchTerm) {
+            $query->where('title', 'ilike', '%' . $searchTerm . '%');
         }
+
+        // Apply group filtering
+        $this->applyGroupFilter($query, $groupBy, $groupId);
 
         return $query->get()->toArray();
     }
 
     /**
-     * Get recipes for a specific group that match a search term
+     * Apply group filtering to a query
      */
-    private function getRecipesForGroupSearch(
-        string $groupBy,
-        int $groupId,
-        string $searchTerm,
-        string $activeDirection,
-        string $titleDirection,
-        int $limit = 15
-    ): array {
-        $query = Recipe::where('title', 'LIKE', '%' . $searchTerm . '%')
-            ->with(['categories', 'cuisines', 'dietary'])
-            ->orderBy('active', $activeDirection)
-            ->orderBy('title', $titleDirection)
-            ->limit($limit);
-
-        // Filter by the appropriate group
-        if ($groupId === 0) {
-            // Handle the "Uncategorized" case
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereDoesntHave('cuisines');
-                    break;
-                case 'category':
-                    $query->whereDoesntHave('categories');
-                    break;
-                case 'dietary':
-                    $query->whereDoesntHave('dietary');
-                    break;
-            }
-        } else {
-            // Handle specific group
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereHas('cuisines', function ($q) use ($groupId) {
-                        $q->where('cuisines.id', $groupId);
-                    });
-                    break;
-                case 'category':
-                    $query->whereHas('categories', function ($q) use ($groupId) {
-                        $q->where('categories.id', $groupId);
-                    });
-                    break;
-                case 'dietary':
-                    $query->whereHas('dietary', function ($q) use ($groupId) {
-                        $q->where('dietary.id', $groupId);
-                    });
-                    break;
-            }
+    private function applyGroupFilter($query, string $groupBy, int $groupId): void
+    {
+        $config = $this->getGroupConfig($groupBy);
+        if (!$config) {
+            return;
         }
 
-        return $query->get()->toArray();
+        if ($groupId === 0) {
+            // Handle "Uncategorized" case
+            $query->whereDoesntHave($config['relationship']);
+        } else {
+            // Handle specific group - specify the table name for the id column
+            $tableName = $config['table'];
+            $query->whereHas($config['relationship'], function ($q) use ($groupId, $tableName) {
+                $q->where($tableName . '.id', $groupId);
+            });
+        }
+    }
+
+    /**
+     * Format standard pagination response
+     */
+    private function formatStandardPagination($paginator): array
+    {
+        return [
+            'data' => $paginator->items(),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+            'prev_page_url' => $paginator->previousPageUrl(),
+            'next_page_url' => $paginator->nextPageUrl(),
+        ];
+    }
+
+    /**
+     * Generate pagination URLs
+     */
+    private function generatePaginationUrls(
+        string $baseUrl,
+        array $params,
+        int $currentPage,
+        int $totalPages
+    ): array {
+        $prevPageUrl = $currentPage > 1
+            ? url($baseUrl) . '?' . http_build_query(array_merge($params, ['page' => $currentPage - 1]))
+            : null;
+
+        $nextPageUrl = $currentPage < $totalPages
+            ? url($baseUrl) . '?' . http_build_query(array_merge($params, ['page' => $currentPage + 1]))
+            : null;
+
+        return [
+            'prev_page_url' => $prevPageUrl,
+            'next_page_url' => $nextPageUrl,
+        ];
     }
 
     // Keep the original methods for backward compatibility
@@ -728,7 +548,7 @@ class BaseRecipeService
 
     public function search($searchTerm, string $activeDirection = 'desc', string $titleDirection = 'asc')
     {
-        return Recipe::where('title', 'LIKE', '%' . $searchTerm . '%')
+        return Recipe::where('title', 'ilike', '%' . $searchTerm . '%')
             ->with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
@@ -740,7 +560,7 @@ class BaseRecipeService
         $query = Recipe::query()->with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
 
         if ($searchTerm) {
-            $query->where('title', 'LIKE', '%' . $searchTerm . '%');
+            $query->where('title', 'ilike', '%' . $searchTerm . '%');
         }
 
         // Filter by category if provided
@@ -749,7 +569,7 @@ class BaseRecipeService
                 if (is_numeric($categoryFilter)) {
                     $q->where('categories.id', $categoryFilter);
                 } else {
-                    $q->where('categories.name', 'LIKE', '%' . $categoryFilter . '%');
+                    $q->where('categories.name', 'ilike', '%' . $categoryFilter . '%');
                 }
             });
         }
@@ -760,7 +580,7 @@ class BaseRecipeService
                 if (is_numeric($cuisineFilter)) {
                     $q->where('cuisines.id', $cuisineFilter);
                 } else {
-                    $q->where('cuisines.name', 'LIKE', '%' . $cuisineFilter . '%');
+                    $q->where('cuisines.name', 'ilike', '%' . $cuisineFilter . '%');
                 }
             });
         }
@@ -771,7 +591,7 @@ class BaseRecipeService
                 if (is_numeric($dietaryFilter)) {
                     $q->where('dietary.id', $dietaryFilter);
                 } else {
-                    $q->where('dietary.name', 'LIKE', '%' . $dietaryFilter . '%');
+                    $q->where('dietary.name', 'ilike', '%' . $dietaryFilter . '%');
                 }
             });
         }

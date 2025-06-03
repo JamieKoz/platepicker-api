@@ -16,6 +16,11 @@ use Illuminate\Database\Query\Builder;
 
 class UserMealService
 {
+    private const GROUPS_PER_PAGE = 5;
+    private const USER_MEALS_PER_GROUP = 15;
+    private const USER_MEALS_PER_PAGE = 50;
+    private const SEARCH_PER_PAGE = 10;
+
     public function getRandomRecipesUnauthorized($count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
         $query = Recipe::query()
@@ -258,23 +263,23 @@ class UserMealService
         $userMeal->save();
     }
 
-    public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
+        public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
         return UserMeal::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->where('user_id', $authId)
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
-            ->paginate(50);
+            ->paginate(self::USER_MEALS_PER_PAGE);
     }
 
     public function search($searchTerm, string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
         return UserMeal::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
             ->where('user_id', $authId)
-            ->where('title', 'LIKE', '%' . $searchTerm . '%')
+            ->where('title', 'ILIKE', '%' . $searchTerm . '%')
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
-            ->paginate(10);
+            ->paginate(self::SEARCH_PER_PAGE);
     }
 
     public function addFromRecipe(string $authId, int $recipeId): UserMeal
@@ -334,7 +339,7 @@ class UserMealService
             ->delete();
     }
 
-public function getRecipeListGrouped(
+    public function getRecipeListGrouped(
         string $groupBy = 'none',
         string $activeDirection = 'desc',
         string $titleDirection = 'asc',
@@ -343,93 +348,18 @@ public function getRecipeListGrouped(
         // If no grouping requested, use the standard pagination method
         if ($groupBy === 'none') {
             $paginator = $this->getRecipeList($activeDirection, $titleDirection);
-            return [
-                'data' => $paginator->items(),
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-                'prev_page_url' => $paginator->previousPageUrl(),
-                'next_page_url' => $paginator->nextPageUrl(),
-            ];
+            return $this->formatPaginatorResponse($paginator);
         }
 
-        // For grouping, we need a different approach
-        // First, get the list of groups and count of user_meals in each group
-        $groups = $this->getGroupsWithCounts($groupBy);
-
-        // Calculate total groups and set up pagination for groups
-        $totalGroups = count($groups);
-        $groupsPerPage = 5; // Show 5 groups per page
-        $totalPages = ceil($totalGroups / $groupsPerPage);
-        $currentPage = min(max(1, $page), max(1, $totalPages));
-
-        // Paginate the groups
-        $paginatedGroups = array_slice($groups, ($currentPage - 1) * $groupsPerPage, $groupsPerPage);
-
-        // For each group in the current page, get its user_meals
-        $groupedUserMeals = [];
-        foreach ($paginatedGroups as $group) {
-            // Get the ID properly regardless of whether it's an array or object
-            $groupId = is_array($group) ? $group['id'] : $group->id;
-            $groupName = is_array($group) ? $group['name'] : $group->name;
-            $groupCount = is_array($group) ? $group['count'] : $group->count;
-
-            // Get user_meals for this group with limited relationships
-            $userMeals = $this->getUserMealsForGroup(
-                $groupBy,
-                $groupId,
-                $activeDirection,
-                $titleDirection,
-                15 // Limit user meals per group to 15
-            );
-
-            $groupedUserMeals[] = [
-                'id' => $groupId,
-                'name' => $groupName,
-                'total_user_meals' => $groupCount,
-                'user_meals' => $userMeals,
-                'has_more' => $groupCount > 15
-            ];
-        }
-
-        // Generate pagination URLs
-        $prevPageUrl = $currentPage > 1
-            ? url('/api/user-meals/list') . '?' . http_build_query([
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage - 1
-            ])
-            : null;
-
-        $nextPageUrl = $currentPage < $totalPages
-            ? url('/api/user-meals/list') . '?' . http_build_query([
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage + 1
-            ])
-            : null;
-
-        // Return the grouped data with pagination info
-        return [
-            'grouped' => true,
-            'group_by' => $groupBy,
-            'groups' => $groupedUserMeals,
-            'pagination' => [
-                'current_page' => $currentPage,
-                'last_page' => $totalPages,
-                'per_page' => $groupsPerPage,
-                'total_groups' => $totalGroups,
-                'from' => (($currentPage - 1) * $groupsPerPage) + 1,
-                'to' => min($currentPage * $groupsPerPage, $totalGroups),
-                'prev_page_url' => $prevPageUrl,
-                'next_page_url' => $nextPageUrl,
-            ]
-        ];
+        // For grouping, use the generic grouped response handler
+        return $this->getGroupedResponse(
+            groupBy: $groupBy,
+            activeDirection: $activeDirection,
+            titleDirection: $titleDirection,
+            page: $page,
+            searchTerm: null,
+            endpoint: '/api/user-meals/list'
+        );
     }
 
     /**
@@ -446,50 +376,58 @@ public function getRecipeListGrouped(
         // If no grouping requested, use the standard search method
         if ($groupBy === 'none') {
             $paginator = $this->search($searchTerm, $activeDirection, $titleDirection);
-            return [
-                'data' => $paginator->items(),
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-                'prev_page_url' => $paginator->previousPageUrl(),
-                'next_page_url' => $paginator->nextPageUrl(),
-            ];
+            return $this->formatPaginatorResponse($paginator);
         }
 
-        // For search with grouping, we need to first find matching user_meals
-        /* $query = Recipe::where('title', 'LIKE', '%' . $searchTerm . '%'); */
-        $query = DB::table('user_meals')->where('title', 'LIKE', '%' . $searchTerm . '%');
+        // For search with grouping, use the generic grouped response handler
+        return $this->getGroupedResponse(
+            groupBy: $groupBy,
+            activeDirection: $activeDirection,
+            titleDirection: $titleDirection,
+            page: $page,
+            searchTerm: $searchTerm,
+            endpoint: '/api/user-meals/search'
+        );
+    }
 
-        // Get groups that have user_meals matching the search
-        $groups = $this->getGroupsWithCountsForSearch($groupBy, $query);
+    /**
+     * Get list of groups with recipe counts
+     */
+     private function getGroupedResponse(
+        string $groupBy,
+        string $activeDirection,
+        string $titleDirection,
+        int $page,
+        ?string $searchTerm,
+        string $endpoint
+    ): array {
+        // Get groups based on whether we're searching or not
+        $groups = $searchTerm
+            ? $this->getGroupsWithCounts($groupBy, $searchTerm)
+            : $this->getGroupsWithCounts($groupBy);
 
-        // Calculate total groups and set up pagination for groups
+        // Calculate pagination
         $totalGroups = count($groups);
-        $groupsPerPage = 5; // Show 5 groups per page
-        $totalPages = ceil($totalGroups / $groupsPerPage);
+        $totalPages = ceil($totalGroups / self::GROUPS_PER_PAGE);
         $currentPage = min(max(1, $page), max(1, $totalPages));
 
         // Paginate the groups
-        $paginatedGroups = array_slice($groups, ($currentPage - 1) * $groupsPerPage, $groupsPerPage);
+        $paginatedGroups = array_slice($groups, ($currentPage - 1) * self::GROUPS_PER_PAGE, self::GROUPS_PER_PAGE);
 
-        // For each group in the current page, get its user_meals that match the search
+        // Build grouped user meals
         $groupedUserMeals = [];
         foreach ($paginatedGroups as $group) {
-            // Get the ID properly regardless of whether it's an array or object
-            $groupId = is_array($group) ? $group['id'] : $group->id;
-            $groupName = is_array($group) ? $group['name'] : $group->name;
-            $groupCount = is_array($group) ? $group['count'] : $group->count;
+            $groupId = $this->extractGroupId($group);
+            $groupName = $this->extractGroupProperty($group, 'name');
+            $groupCount = $this->extractGroupProperty($group, 'count');
 
-            // Get user_meals for this group with limited relationships
-            $userMeals = $this->getUserMealsForGroupSearch(
-                $groupBy,
-                $groupId,
-                $activeDirection,
-                $titleDirection,
-                15 // Limit userMeals per group to 15
+            $userMeals = $this->getUserMealsForGroup(
+                groupBy: $groupBy,
+                groupId: $groupId,
+                activeDirection: $activeDirection,
+                titleDirection: $titleDirection,
+                searchTerm: $searchTerm,
+                limit: self::USER_MEALS_PER_GROUP
             );
 
             $groupedUserMeals[] = [
@@ -497,317 +435,114 @@ public function getRecipeListGrouped(
                 'name' => $groupName,
                 'total_user_meals' => $groupCount,
                 'user_meals' => $userMeals,
-                'has_more' => $groupCount > 15
+                'has_more' => $groupCount > self::USER_MEALS_PER_GROUP
             ];
         }
 
         // Generate pagination URLs
-        $prevPageUrl = $currentPage > 1
-            ? url('/api/user-meals/search') . '?' . http_build_query([
-                'q' => $searchTerm,
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage - 1
-            ])
-            : null;
+        $queryParams = [
+            'group_by' => $groupBy,
+            'active_direction' => $activeDirection,
+            'title_direction' => $titleDirection,
+        ];
 
-        $nextPageUrl = $currentPage < $totalPages
-            ? url('/api/user-meals/search') . '?' . http_build_query([
-                'q' => $searchTerm,
-                'group_by' => $groupBy,
-                'active_direction' => $activeDirection,
-                'title_direction' => $titleDirection,
-                'page' => $currentPage + 1
-            ])
-            : null;
+        if ($searchTerm) {
+            $queryParams['q'] = $searchTerm;
+        }
 
-        // Return the grouped data with pagination info
         return [
             'grouped' => true,
             'group_by' => $groupBy,
             'groups' => $groupedUserMeals,
-            'pagination' => [
-                'current_page' => $currentPage,
-                'last_page' => $totalPages,
-                'per_page' => $groupsPerPage,
-                'total_groups' => $totalGroups,
-                'from' => (($currentPage - 1) * $groupsPerPage) + 1,
-                'to' => min($currentPage * $groupsPerPage, $totalGroups),
-                'prev_page_url' => $prevPageUrl,
-                'next_page_url' => $nextPageUrl,
-            ]
+            'pagination' => $this->buildGroupPagination(
+                currentPage: $currentPage,
+                totalPages: $totalPages,
+                totalGroups: $totalGroups,
+                endpoint: $endpoint,
+                queryParams: $queryParams
+            )
         ];
-    }
-
-    /**
-     * Get list of groups with recipe counts
-     */
-    private function getGroupsWithCounts(string $groupBy): array
-    {
-        switch ($groupBy) {
-            case 'cuisine':
-                // Get cuisines with recipe counts
-                $groups = DB::table('cuisines')
-                    ->select('cuisines.id', 'cuisines.name', DB::raw('COUNT(DISTINCT user_meals_cuisine.user_meal_id) as count'))
-                    ->leftJoin('user_meals_cuisine', 'cuisines.id', '=', 'user_meals_cuisine.cuisine_id')
-                    ->groupBy('cuisines.id', 'cuisines.name')
-                    ->orderBy('cuisines.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count
-                $uncategorizedCount = DB::table('user_meals')
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('user_meals_cuisine')
-                            ->whereRaw('user_meals.id = user_meals_cuisine.user_meal_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            case 'category':
-                // Get categories with recipe counts
-                $groups = DB::table('categories')
-                    ->select('categories.id', 'categories.name', DB::raw('COUNT(DISTINCT user_meals_categories.user_meal_id) as count'))
-                    ->leftJoin('user_meals_categories', 'categories.id', '=', 'user_meals_categories.category_id')
-                    ->groupBy('categories.id', 'categories.name')
-                    ->orderBy('categories.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count
-                $uncategorizedCount = DB::table('user_meals')
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('user_meals_categories')
-                            ->whereRaw('user_meals.id = user_meals_categories.user_meal_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            case 'dietary':
-                // Get dietary requirements with user meals counts
-                $groups = DB::table('dietary')
-                    ->select('dietary.id', 'dietary.name', DB::raw('COUNT(DISTINCT user_meals_dietary.user_meals_id) as count'))
-                    ->leftJoin('user_meals_dietary', 'dietary.id', '=', 'user_meals_dietary.dietary_id')
-                    ->groupBy('dietary.id', 'dietary.name')
-                    ->orderBy('dietary.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count
-                $uncategorizedCount = DB::table('user_meals')
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('user_meals_dietary')
-                            ->whereRaw('user_meals.id = user_meals_dietary.user_meals_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            default:
-                return [];
-        }
     }
 
     /**
      * Get list of groups with recipe counts for search
      */
-    private function getGroupsWithCountsForSearch(string $groupBy, Builder $searchQuery): array
+      private function getGroupsWithCounts(string $groupBy, ?string $searchTerm = null): array
     {
-        $userMealIds = $searchQuery->pluck('id')->toArray();
+        $groupConfigs = [
+            'cuisine' => [
+                'table' => 'cuisines',
+                'joinTable' => 'user_meals_cuisine',
+                'foreignKey' => 'cuisine_id',
+                'userMealKey' => 'user_meal_id'
+            ],
+            'category' => [
+                'table' => 'categories',
+                'joinTable' => 'user_meals_categories',
+                'foreignKey' => 'category_id',
+                'userMealKey' => 'user_meal_id'
+            ],
+            'dietary' => [
+                'table' => 'dietary',
+                'joinTable' => 'user_meals_dietary',
+                'foreignKey' => 'dietary_id',
+                'userMealKey' => 'user_meals_id'
+            ]
+        ];
 
-        if (empty($userMealIds)) {
+        if (!isset($groupConfigs[$groupBy])) {
             return [];
         }
 
-        switch ($groupBy) {
-            case 'cuisine':
-                // Get cuisines with recipe counts for matching user_meals
-                $groups = DB::table('cuisines')
-                    ->select('cuisines.id', 'cuisines.name', DB::raw('COUNT(DISTINCT user_meals_cuisine.user_meals_id) as count'))
-                    ->join('user_meals_cuisine', 'cuisines.id', '=', 'user_meals_cuisine.cuisine_id')
-                    ->whereIn('user_meals_cuisine.user_meal_id', $userMealIds)
-                    ->groupBy('cuisines.id', 'cuisines.name')
-                    ->orderBy('cuisines.name')
-                    ->get()
-                    ->toArray();
+        $config = $groupConfigs[$groupBy];
 
-                // Add uncategorized count for matching user_meals
-                $uncategorizedCount = DB::table('user_meals')
-                    ->whereIn('user_meals.id', $userMealIds)
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('user_meals_cuisine')
-                            ->whereRaw('user_meals.id = user_meals_cuisine.user_meals_id');
-                    })
-                    ->count();
+        // If searching, get filtered user meal IDs first
+        $userMealIds = null;
+        if ($searchTerm) {
+            $userMealIds = DB::table('user_meals')
+                ->where('title', 'ILIKE', '%' . $searchTerm . '%')
+                ->pluck('id')
+                ->toArray();
 
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-                // Similar implementations for category and dietary
-            case 'category':
-                // Get categories with user meals counts for matching user_meals
-                $groups = DB::table('categories')
-                    ->select('categories.id', 'categories.name', DB::raw('COUNT(DISTINCT user_meals_categories.user_meals_id) as count'))
-                    ->join('user_meals_categories', 'categories.id', '=', 'user_meals_categories.category_id')
-                    ->whereIn('user_meals_categories.user_meals_id', $userMealIds)
-                    ->groupBy('categories.id', 'categories.name')
-                    ->orderBy('categories.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count for matching user_meals
-                $uncategorizedCount = DB::table('user_meals')
-                    ->whereIn('user_meals.id', $userMealIds)
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('user_meals_categories')
-                            ->whereRaw('user_meals.id = user_meals_categories.user_meals_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            case 'dietary':
-                // Get dietary requirements with user meals counts for matching user_meals
-                $groups = DB::table('dietary')
-                    ->select('dietary.id', 'dietary.name', DB::raw('COUNT(DISTINCT user_meals_dietary.user_meals_id) as count'))
-                    ->join('user_meals_dietary', 'dietary.id', '=', 'user_meals_dietary.dietary_id')
-                    ->whereIn('user_meals_dietary.user_meals_id', $userMealIds)
-                    ->groupBy('dietary.id', 'dietary.name')
-                    ->orderBy('dietary.name')
-                    ->get()
-                    ->toArray();
-
-                // Add uncategorized count for matching user_meals
-                $uncategorizedCount = DB::table('user_meals')
-                    ->whereIn('user_meals.id', $userMealIds)
-                    ->whereNotExists(function ($query) {
-                        $query->select(DB::raw(1))
-                            ->from('user_meals_dietary')
-                            ->whereRaw('user_meals.id = user_meals_dietary.user_meals_id');
-                    })
-                    ->count();
-
-                if ($uncategorizedCount > 0) {
-                    $groups[] = [
-                        'id' => 0,
-                        'name' => 'Uncategorized',
-                        'count' => $uncategorizedCount
-                    ];
-                }
-
-                return array_values($groups);
-
-            default:
+            if (empty($userMealIds)) {
                 return [];
+            }
         }
+
+        // Get grouped counts
+        $groups = $this->getGroupedCounts($config, $userMealIds);
+
+        // Add uncategorized count
+        $uncategorizedCount = $this->getUncategorizedCount($config['joinTable'], $userMealIds);
+
+        if ($uncategorizedCount > 0) {
+            $groups[] = [
+                'id' => 0,
+                'name' => 'Uncategorized',
+                'count' => $uncategorizedCount
+            ];
+        }
+
+        return array_values($groups);
     }
 
     /**
      * Get user_meals for a specific group
      */
-    private function getUserMealsForGroup(
-        string $groupBy,
-        $groupId, // Don't enforce a type here to be flexible
-        string $activeDirection,
-        string $titleDirection,
-        int $limit = 15
-    ): array {
-        // If the group ID is coming as an array key, access it properly
-        if (is_array($groupId)) {
-            $groupId = $groupId['id'];
-        } else if (is_object($groupId)) {
-            $groupId = $groupId->id;
-        }
+     private function getGroupedCounts(array $config, ?array $userMealIds = null): array
+    {
+        $query = DB::table($config['table'])
+            ->select(
+                $config['table'] . '.id',
+                $config['table'] . '.name',
+                DB::raw('COUNT(DISTINCT ' . $config['joinTable'] . '.' . $config['userMealKey'] . ') as count')
+            )
+            ->leftJoin($config['joinTable'], $config['table'] . '.id', '=', $config['joinTable'] . '.' . $config['foreignKey'])
+            ->groupBy($config['table'] . '.id', $config['table'] . '.name')
+            ->orderBy($config['table'] . '.name');
 
-        // Ensure it's an integer
-        $groupId = (int)$groupId;
-
-        // Rest of your method remains the same
-        $query = UserMeal::with(['categories', 'cuisines', 'dietary'])
-            ->orderBy('active', $activeDirection)
-            ->orderBy('title', $titleDirection)
-            ->limit($limit);
-
-        // Filter by the appropriate group
-        if ($groupId === 0) {
-            // Handle the "Uncategorized" case
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereDoesntHave('cuisines');
-                    break;
-                case 'category':
-                    $query->whereDoesntHave('categories');
-                    break;
-                case 'dietary':
-                    $query->whereDoesntHave('dietary');
-                    break;
-            }
-        } else {
-            // Handle specific group
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereHas('cuisines', function ($q) use ($groupId) {
-                        $q->where('cuisines.id', $groupId);
-                    });
-                    break;
-                case 'category':
-                    $query->whereHas('categories', function ($q) use ($groupId) {
-                        $q->where('categories.id', $groupId);
-                    });
-                    break;
-                case 'dietary':
-                    $query->whereHas('dietary', function ($q) use ($groupId) {
-                        $q->where('dietary.id', $groupId);
-                    });
-                    break;
-            }
+        if ($userMealIds !== null) {
+            $query->whereIn($config['joinTable'] . '.' . $config['userMealKey'], $userMealIds);
         }
 
         return $query->get()->toArray();
@@ -816,56 +551,28 @@ public function getRecipeListGrouped(
     /**
      * Get recipes for a specific group that match a search term
      */
-    private function getUserMealsForGroupSearch(
-        string $groupBy,
-        int $groupId,
-        string $searchTerm,
-        string $activeDirection,
-        string $titleDirection,
-        int $limit = 15
-    ): array {
-        $query = UserMeal::where('title', 'LIKE', '%' . $searchTerm . '%')
-            ->with(['categories', 'cuisines', 'dietary'])
-            ->orderBy('active', $activeDirection)
-            ->orderBy('title', $titleDirection)
-            ->limit($limit);
+    private function getUncategorizedCount(string $joinTable, ?array $userMealIds = null): int
+    {
+        // Determine the correct column name based on the join table
+        $userMealColumn = match ($joinTable) {
+            'user_meals_dietary' => 'user_meals_id',
+            'user_meals_cuisine' => 'user_meal_id',
+            'user_meals_categories' => 'user_meal_id',
+            default => 'user_meal_id'
+        };
 
-        // Filter by the appropriate group
-        if ($groupId === 0) {
-            // Handle the "Uncategorized" case
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereDoesntHave('cuisines');
-                    break;
-                case 'category':
-                    $query->whereDoesntHave('categories');
-                    break;
-                case 'dietary':
-                    $query->whereDoesntHave('dietary');
-                    break;
-            }
-        } else {
-            // Handle specific group
-            switch ($groupBy) {
-                case 'cuisine':
-                    $query->whereHas('cuisines', function ($q) use ($groupId) {
-                        $q->where('cuisines.id', $groupId);
-                    });
-                    break;
-                case 'category':
-                    $query->whereHas('categories', function ($q) use ($groupId) {
-                        $q->where('categories.id', $groupId);
-                    });
-                    break;
-                case 'dietary':
-                    $query->whereHas('dietary', function ($q) use ($groupId) {
-                        $q->where('dietary.id', $groupId);
-                    });
-                    break;
-            }
+        $query = DB::table('user_meals')
+        ->whereNotExists(function ($query) use ($joinTable, $userMealColumn) {
+            $query->select(DB::raw(1))
+                ->from($joinTable)
+                ->whereRaw('user_meals.id = ' . $joinTable . '.' . $userMealColumn);
+        });
+
+        if ($userMealIds !== null) {
+            $query->whereIn('user_meals.id', $userMealIds);
         }
 
-        return $query->get()->toArray();
+        return $query->count();
     }
 
     public function getUserMeals($searchTerm = null, string $titleDirection = 'asc', $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null): LengthAwarePaginator
@@ -873,7 +580,7 @@ public function getRecipeListGrouped(
         $query = UserMeal::query()->with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement']);
 
         if ($searchTerm) {
-            $query->where('title', 'LIKE', '%' . $searchTerm . '%');
+            $query->where('title', 'ILIKE', '%' . $searchTerm . '%');
         }
 
         // Filter by category if provided
@@ -882,7 +589,7 @@ public function getRecipeListGrouped(
                 if (is_numeric($categoryFilter)) {
                     $q->where('categories.id', $categoryFilter);
                 } else {
-                    $q->where('categories.name', 'LIKE', '%' . $categoryFilter . '%');
+                    $q->where('categories.name', 'ILIKE', '%' . $categoryFilter . '%');
                 }
             });
         }
@@ -893,7 +600,7 @@ public function getRecipeListGrouped(
                 if (is_numeric($cuisineFilter)) {
                     $q->where('cuisines.id', $cuisineFilter);
                 } else {
-                    $q->where('cuisines.name', 'LIKE', '%' . $cuisineFilter . '%');
+                    $q->where('cuisines.name', 'ILIKE', '%' . $cuisineFilter . '%');
                 }
             });
         }
@@ -904,14 +611,149 @@ public function getRecipeListGrouped(
                 if (is_numeric($dietaryFilter)) {
                     $q->where('dietary.id', $dietaryFilter);
                 } else {
-                    $q->where('dietary.name', 'LIKE', '%' . $dietaryFilter . '%');
+                    $q->where('dietary.name', 'ILIKE', '%' . $dietaryFilter . '%');
                 }
             });
         }
 
-        return $query->orderBy('title', $titleDirection)->paginate(50);
+        return $query->orderBy('title', $titleDirection)->paginate(self::USER_MEALS_PER_PAGE);
     }
 
+
+  private function getUserMealsForGroup(
+        string $groupBy,
+        int $groupId,
+        string $activeDirection,
+        string $titleDirection,
+        ?string $searchTerm = null,
+        int $limit = 15
+    ): array {
+        $query = UserMeal::with(['categories', 'cuisines', 'dietary'])
+            ->orderBy('active', $activeDirection)
+            ->orderBy('title', $titleDirection)
+            ->limit($limit);
+
+        // Add search condition if provided
+        if ($searchTerm) {
+            $query->where('title', 'ILIKE', '%' . $searchTerm . '%');
+        }
+
+        // Apply group filter
+        $this->applyGroupFilter($query, $groupBy, $groupId);
+
+        return $query->get()->toArray();
+    }
+
+    /**
+     * Apply group filter to query
+     */
+    private function applyGroupFilter($query, string $groupBy, int $groupId): void
+    {
+        if ($groupId === 0) {
+            // Handle uncategorized
+            $relationMap = [
+                'cuisine' => 'cuisines',
+                'category' => 'categories',
+                'dietary' => 'dietary'
+            ];
+
+            if (isset($relationMap[$groupBy])) {
+                $query->whereDoesntHave($relationMap[$groupBy]);
+            }
+        } else {
+            // Handle specific group
+            switch ($groupBy) {
+                case 'cuisine':
+                    $query->whereHas('cuisines', function ($q) use ($groupId) {
+                        $q->where('cuisines.id', $groupId);
+                    });
+                    break;
+                case 'category':
+                    $query->whereHas('categories', function ($q) use ($groupId) {
+                        $q->where('categories.id', $groupId);
+                    });
+                    break;
+                case 'dietary':
+                    $query->whereHas('dietary', function ($q) use ($groupId) {
+                        $q->where('dietary.id', $groupId);
+                    });
+                    break;
+            }
+        }
+    }
+  private function formatPaginatorResponse(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'data' => $paginator->items(),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+            'prev_page_url' => $paginator->previousPageUrl(),
+            'next_page_url' => $paginator->nextPageUrl(),
+        ];
+    }
+
+    /**
+     * Build group pagination data
+     */
+    private function buildGroupPagination(
+        int $currentPage,
+        int $totalPages,
+        int $totalGroups,
+        string $endpoint,
+        array $queryParams
+    ): array {
+        $prevPageUrl = null;
+        $nextPageUrl = null;
+
+        if ($currentPage > 1) {
+            $prevPageUrl = url($endpoint) . '?' . http_build_query(
+                array_merge($queryParams, ['page' => $currentPage - 1])
+            );
+        }
+
+        if ($currentPage < $totalPages) {
+            $nextPageUrl = url($endpoint) . '?' . http_build_query(
+                array_merge($queryParams, ['page' => $currentPage + 1])
+            );
+        }
+
+        return [
+            'current_page' => $currentPage,
+            'last_page' => $totalPages,
+            'per_page' => self::GROUPS_PER_PAGE,
+            'total_groups' => $totalGroups,
+            'from' => (($currentPage - 1) * self::GROUPS_PER_PAGE) + 1,
+            'to' => min($currentPage * self::GROUPS_PER_PAGE, $totalGroups),
+            'prev_page_url' => $prevPageUrl,
+            'next_page_url' => $nextPageUrl,
+        ];
+    }
+
+    /**
+     * Extract group ID from various formats
+     */
+    private function extractGroupId($group): int
+    {
+        if (is_array($group)) {
+            return (int) $group['id'];
+        } elseif (is_object($group)) {
+            return (int) $group->id;
+        }
+        return (int) $group;
+    }
+    private function extractGroupProperty($group, string $property)
+    {
+        if (is_array($group)) {
+            return $group[$property];
+        } elseif (is_object($group)) {
+            return $group->$property;
+        }
+        return null;
+    }
     public function showMeal($mealId)
     {
         return UserMeal::with([
