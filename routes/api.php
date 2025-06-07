@@ -12,6 +12,7 @@ use App\Http\Controllers\DietaryController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\IngredientController;
 use App\Http\Controllers\MeasurementController;
+use App\Http\Controllers\RecipeGroupsController;
 use App\Http\Controllers\UserController;
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +55,14 @@ Route::post('/recipes/{id}', [BaseRecipeController::class, 'update']);
 Route::get('/recipes/group-values', [BaseRecipeController::class, 'getGroupValues']);
 Route::post('/users/assign-initial-recipes', [BaseRecipeController::class, 'assignInitialMealsToUser']);
 Route::get('/recipes/{id}', [BaseRecipeController::class, 'show']);
+
+Route::prefix('recipes/{recipe}')->group(function () {
+    Route::get('/groups', [RecipeGroupsController::class, 'index']);
+    Route::post('/groups', [RecipeGroupsController::class, 'store']);
+    Route::put('/groups/{group}', [RecipeGroupsController::class, 'update']);
+    Route::delete('/groups/{group}', [RecipeGroupsController::class, 'destroy']);
+    Route::post('/groups/reorder', [RecipeGroupsController::class, 'reorder']);
+});
 
 // Category routes
 Route::get('/categories', [CategoryController::class, 'index']);

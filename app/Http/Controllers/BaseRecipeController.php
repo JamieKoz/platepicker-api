@@ -165,6 +165,8 @@ class BaseRecipeController extends Controller
                 'recipe_lines.*.quantity' => 'nullable|numeric',
                 'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
                 'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
+                'recipe_lines.*.recipe_group_id' => 'nullable|integer', // Will be mapped from group name in service
+                'recipe_lines.*.group_name' => 'nullable|string|max:100',
                 'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
             $recipe = $this->baseRecipeService->updateRecipe($id, $validated);
@@ -283,6 +285,8 @@ class BaseRecipeController extends Controller
                 'recipe_lines.*.quantity' => 'nullable|numeric',
                 'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
                 'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
+                'recipe_lines.*.recipe_group_id' => 'nullable|integer', // Will be mapped from group name in service
+                'recipe_lines.*.group_name' => 'nullable|string|max:100',
                 'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
 

@@ -79,4 +79,19 @@ class Recipe extends Model
     {
         return $this->hasMany(RecipeLine::class)->orderBy('sort_order');
     }
+
+    public function recipeGroups(): HasMany
+    {
+        return $this->hasMany(RecipeGroup::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Get recipe lines that don't belong to any group (ungrouped ingredients)
+     */
+    public function ungroupedRecipeLines(): HasMany
+    {
+        return $this->hasMany(RecipeLine::class)
+            ->whereNull('recipe_group_id')
+            ->orderBy('sort_order');
+    }
 }

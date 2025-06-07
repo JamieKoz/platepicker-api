@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Ingredient;
 use App\Models\Measurement;
 use App\Models\Recipe;
+use App\Models\RecipeGroup;
 use App\Models\RecipeLine;
 use App\Models\UserMeal;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -153,6 +154,7 @@ class BaseRecipeService
                 'recipe_id' => $recipe->id,
                 'ingredient_id' => $ingredientId,
                 'quantity' => $line['quantity'] ?? null,
+                'recipe_group_id' => $line['recipe_group_id'] ?? null,
                 'sort_order' => $line['sort_order'] ?? $sortOrder,
             ]);
 
@@ -171,6 +173,62 @@ class BaseRecipeService
             $sortOrder++;
         }
     }
+
+    public function getRecipeWithGroups($recipeId)
+    {
+        $recipe = Recipe::with([
+            'recipeGroups.recipeLines.ingredient',
+            'recipeGroups.recipeLines.measurement',
+            'ungroupedRecipeLines.ingredient',
+            'ungroupedRecipeLines.measurement'
+        ])->findOrFail($recipeId);
+
+        return $recipe;
+    }
+
+    public function updateRecipeGroups($recipe, $groups)
+    {
+        if (empty($groups)) {
+            return;
+        }
+
+        foreach ($groups as $index => $groupData) {
+            RecipeGroup::updateOrCreate([
+                'recipe_id' => $recipe->id,
+                'name' => $groupData['name'],
+            ], [
+                'description' => $groupData['description'] ?? null,
+                'sort_order' => $groupData['sort_order'] ?? $index,
+            ]);
+        }
+    }
+    public function reorganizeRecipeLines($recipe, $oldGroupName, $newGroupName = null)
+    {
+        $group = null;
+
+        if ($newGroupName) {
+            $group = RecipeGroup::firstOrCreate([
+                'recipe_id' => $recipe->id,
+                'name' => $newGroupName,
+            ]);
+        }
+
+        // Update all recipe lines that belonged to the old group
+        $recipe->recipeLines()
+            ->whereHas('recipeGroup', function ($query) use ($oldGroupName) {
+                $query->where('name', $oldGroupName);
+            })
+            ->update(['recipe_group_id' => $group?->id]);
+
+        // Delete the old group if it's empty
+        if ($newGroupName) {
+            RecipeGroup::where('recipe_id', $recipe->id)
+                ->where('name', $oldGroupName)
+                ->whereDoesntHave('recipeLines')
+                ->delete();
+        }
+    }
+
 
     public function toggleStatus($mealId): void
     {

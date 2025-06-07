@@ -17,6 +17,7 @@ class RecipeLine extends Model
         'quantity',
         'measurement_id',
         'notes',
+        'recipe_group_id',
         'sort_order',
     ];
 
@@ -47,5 +48,18 @@ class RecipeLine extends Model
     public function userMeal(): BelongsTo
     {
         return $this->belongsTo(UserMeal::class);
+    }
+
+    public function recipeGroup(): BelongsTo
+    {
+        return $this->belongsTo(RecipeGroup::class);
+    }
+
+    /**
+     * Scope to get recipe lines grouped by group_name
+     */
+    public function scopeGrouped($query)
+    {
+        return $query->with('recipeGroup')->orderBy('recipe_group_id')->orderBy('sort_order');
     }
 }
