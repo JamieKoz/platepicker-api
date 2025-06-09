@@ -308,8 +308,6 @@ class BaseRecipeController extends Controller
                 return response()->json(['error' => 'Recipe not found'], 404);
             }
 
-            $recipe->recipeLines = $recipe->recipeLines->sortBy('sort_order')->values();
-
             return response()->json($recipe);
         } catch (ModelNotFoundException $e) {
 

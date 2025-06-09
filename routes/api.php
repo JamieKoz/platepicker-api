@@ -43,7 +43,6 @@ Route::post('/user-meals/{id}/increment-tally', [TallyController::class, 'increm
 
 Route::prefix('user-meals/{userMealId}')->group(function () {
     Route::get('/groups', [UserMealGroupsController::class, 'index']);
-    Route::get('/groups/complete', [UserMealGroupsController::class, 'getUserMealWithGroups']);
     Route::post('/groups', [UserMealGroupsController::class, 'store']);
     Route::put('/groups/{group}', [UserMealGroupsController::class, 'update']);
     Route::delete('/groups/{group}', [UserMealGroupsController::class, 'destroy']);
@@ -69,7 +68,6 @@ Route::get('/recipes/{id}', [BaseRecipeController::class, 'show']);
 
 Route::prefix('recipes/{recipe}')->group(function () {
     Route::get('/groups', [RecipeGroupsController::class, 'index']);
-    Route::get('/groups/complete', [RecipeGroupsController::class, 'getRecipeWithGroups']);
     Route::post('/groups', [RecipeGroupsController::class, 'store']);
     Route::put('/groups/{group}', [RecipeGroupsController::class, 'update']);
     Route::delete('/groups/{group}', [RecipeGroupsController::class, 'destroy']);

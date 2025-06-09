@@ -65,4 +65,9 @@ class UserMeal extends Model
     {
         return $this->hasMany(RecipeLine::class)->orderBy('sort_order');
     }
+
+    public function userMealGroups(): HasMany
+    {
+        return $this->hasMany(UserMealGroup::class)->orderBy('sort_order');
+    }
 }

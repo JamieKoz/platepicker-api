@@ -176,39 +176,4 @@ class UserMealGroupsController extends Controller
         }
     }
 
-    /**
-     * Get user meal with all groups and ungrouped lines
-     */
-    public function getUserMealWithGroups(Request $request, $userMealId): JsonResponse
-    {
-        try {
-            $userData = json_decode($request->header('X-User-Data'), true);
-            if (!$userData || !isset($userData['id'])) {
-                return response()->json(['error' => 'User data not provided.'], 401);
-            }
-
-            $userMeal = UserMeal::with([
-                'recipeGroups' => function ($query) {
-                    $query->ordered()->with(['recipeLines' => function ($lineQuery) {
-                        $lineQuery->with('ingredient', 'measurement')->orderBy('sort_order');
-                    }]);
-                }
-            ])->findOrFail($userMealId);
-
-            // Get ungrouped recipe lines using the new scope
-            $userMeal->ungrouped_recipe_lines = \App\Models\RecipeLine::where('user_meal_id', $userMealId)
-                ->ungroupedUserMeal()
-                ->get();
-
-            // Get all recipe lines for convenience
-            $userMeal->all_recipe_lines = \App\Models\RecipeLine::where('user_meal_id', $userMealId)
-                ->groupedByUserMealGroup()
-                ->get();
-
-            return response()->json(['data' => $userMeal]);
-        } catch (\Exception $e) {
-            Log::error('Failed to fetch user meal with groups', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Failed to fetch user meal with groups.'], 500);
-        }
-    }
 }

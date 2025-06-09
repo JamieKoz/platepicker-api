@@ -5,11 +5,21 @@ use App\Models\RecipeGroup;
 use App\Models\Recipe;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
 class RecipeGroupsController extends Controller
 {
+    protected $apiKey;
+    protected $clerkUrl;
+
+    public function __construct()
+    {
+        $this->apiKey = env('CLERK_API_KEY');
+        $this->clerkUrl = env('CLERK_API_URL', 'https://api.clerk.com/v1');
+    }
+
     /**
      * Get all groups for a specific recipe
      */
@@ -192,40 +202,24 @@ class RecipeGroupsController extends Controller
         }
     }
 
-    /**
-     * Get recipe with all groups and ungrouped lines
-     */
-    public function getRecipeWithGroups(Request $request, $recipe): JsonResponse
+    public function validateIsAdminWithClerk($userId): bool
     {
-        try {
-            $recipeModel = Recipe::with([
-                'recipeGroups' => function ($query) {
-                    $query->ordered()->with(['recipeLines' => function ($lineQuery) {
-                        $lineQuery->with('ingredient', 'measurement')->orderBy('sort_order');
-                    }]);
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->get($this->clerkUrl . '/users/' . $userId . '/organization_memberships');
+
+        if ($response->successful()) {
+            $data = $response->json();
+            if (!empty($data['data']) && count($data['data']) > 0) {
+                foreach ($data['data'] as $membership) {
+                    if (isset($membership['role_name']) && $membership['role_name'] === 'Admin') {
+                        return true;
+                    }
                 }
-            ])->findOrFail($recipe);
-
-            // Get ungrouped recipe lines using the new scope
-            $recipeModel->ungrouped_recipe_lines = \App\Models\RecipeLine::where('recipe_id', $recipe)
-                ->ungroupedRecipe()
-                ->get();
-
-            // Get all recipe lines for convenience
-            $recipeModel->all_recipe_lines = \App\Models\RecipeLine::where('recipe_id', $recipe)
-                ->groupedByRecipeGroup()
-                ->get();
-
-            return response()->json(['data' => $recipeModel]);
-        } catch (\Exception $e) {
-            Log::error('Failed to fetch recipe with groups', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Failed to fetch recipe with groups.'], 500);
+            }
         }
-    }
 
-    private function validateIsAdminWithClerk(string $userId): bool
-    {
-        // Your existing Clerk validation logic
-        return true; // Placeholder
+        return false;
     }
 }

@@ -163,6 +163,8 @@ class UserMealController extends Controller
                 'recipe_lines.*.quantity' => 'nullable|numeric',
                 'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
                 'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
+                'recipe_lines.*.user_meal_group_id' => 'nullable|exists:user_meal_groups,id',
+                'recipe_lines.*.group_name' => 'nullable|string|max:100',
                 'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
 
@@ -205,6 +207,8 @@ class UserMealController extends Controller
                 'recipe_lines.*.quantity' => 'nullable|numeric',
                 'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
                 'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
+                'recipe_lines.*.user_meal_group_id' => 'nullable|exists:user_meal_groups,id',
+                'recipe_lines.*.group_name' => 'nullable|string|max:100',
                 'recipe_lines.*.sort_order' => 'nullable|integer',
             ]);
 
@@ -278,7 +282,6 @@ class UserMealController extends Controller
     {
         try {
             $recipe = $this->userMealService->showMeal($id);
-            $recipe->recipeLines = $recipe->recipeLines->sortBy('sort_order')->values();
 
             return response()->json($recipe);
         } catch (ModelNotFoundException $e) {

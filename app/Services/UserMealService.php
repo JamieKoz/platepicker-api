@@ -235,6 +235,7 @@ class UserMealService
                 'ingredient_id' => $ingredientId,
                 'quantity' => $line['quantity'] ?? null,
                 'sort_order' => $line['sort_order'] ?? $sortOrder,
+                'user_meal_group_id' => !empty($line['user_meal_group_id']) ? $line['user_meal_group_id'] : null,
             ]);
 
             // Handle measurement if provided
@@ -754,14 +755,24 @@ class UserMealService
         }
         return null;
     }
+
     public function showMeal($mealId)
     {
-        return UserMeal::with([
+        $userMeal = UserMeal::with([
             'categories',
             'cuisines',
             'dietary',
             'recipeLines.ingredient',
-            'recipeLines.measurement'
+            'recipeLines.measurement',
+            'userMealGroups' => function ($query) {
+                $query->orderBy('sort_order');
+            }
         ])->findOrFail($mealId);
+
+        $userMeal->recipe_groups = $userMeal->userMealGroups;
+
+        unset($userMeal->userMealGroups);
+
+        return $userMeal;
     }
 }

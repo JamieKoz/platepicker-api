@@ -674,7 +674,10 @@ class BaseRecipeService
             'cuisines',
             'dietary',
             'recipeLines.ingredient',
-            'recipeLines.measurement'
+            'recipeLines.measurement',
+            'recipeGroups' => function ($query) {
+                $query->orderBy('sort_order');
+            }
         ])->findOrFail($mealId);
     }
 }
