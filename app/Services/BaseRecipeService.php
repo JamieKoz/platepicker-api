@@ -156,6 +156,7 @@ class BaseRecipeService
                 'quantity' => $line['quantity'] ?? null,
                 'recipe_group_id' => $line['recipe_group_id'] ?? null,
                 'sort_order' => $line['sort_order'] ?? $sortOrder,
+                'notes' => $line['notes'] ?? null,
             ]);
 
             // Handle measurement if provided

@@ -163,6 +163,7 @@ class BaseRecipeController extends Controller
                 'recipe_lines.*.ingredient_name' => 'required_without:recipe_lines.*.ingredient_id|string|max:255',
                 'recipe_lines.*.ingredient_id' => 'nullable|exists:ingredients,id',
                 'recipe_lines.*.quantity' => 'nullable|numeric',
+                'recipe_lines.*.notes' => 'nullable|string|max:500',
                 'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
                 'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
                 'recipe_lines.*.recipe_group_id' => 'nullable|integer', // Will be mapped from group name in service
@@ -283,6 +284,7 @@ class BaseRecipeController extends Controller
                 'recipe_lines.*.ingredient_name' => 'required_without:recipe_lines.*.ingredient_id|string|max:255',
                 'recipe_lines.*.ingredient_id' => 'nullable|exists:ingredients,id',
                 'recipe_lines.*.quantity' => 'nullable|numeric',
+                'recipe_lines.*.notes' => 'nullable|string|max:500',
                 'recipe_lines.*.measurement_name' => 'nullable|string|max:255',
                 'recipe_lines.*.measurement_id' => 'nullable|exists:measurements,id',
                 'recipe_lines.*.recipe_group_id' => 'nullable|integer', // Will be mapped from group name in service

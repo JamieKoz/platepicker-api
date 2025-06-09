@@ -236,6 +236,7 @@ class UserMealService
                 'quantity' => $line['quantity'] ?? null,
                 'sort_order' => $line['sort_order'] ?? $sortOrder,
                 'user_meal_group_id' => !empty($line['user_meal_group_id']) ? $line['user_meal_group_id'] : null,
+                'notes' => $line['notes'] ?? null,
             ]);
 
             // Handle measurement if provided
