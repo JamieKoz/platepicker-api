@@ -1,24 +1,24 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\RecipeGroup;
-use App\Models\Recipe;
+use App\Models\UserMealGroup;
+use App\Models\UserMeal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
-class RecipeGroupsController extends Controller
+class UserMealGroupsController extends Controller
 {
     /**
-     * Get all groups for a specific recipe
+     * Get all groups for a specific user meal
      */
-    public function index(Request $request, $recipeId): JsonResponse
+    public function index(Request $request, $userMealId): JsonResponse
     {
         try {
-            $recipe = Recipe::findOrFail($recipeId);
+            $userMeal = UserMeal::findOrFail($userMealId);
 
-            $groups = RecipeGroup::where('recipe_id', $recipeId)
+            $groups = UserMealGroup::where('user_meal_id', $userMealId)
                 ->with(['recipeLines' => function($query) {
                     $query->with('ingredient', 'measurement')->orderBy('sort_order');
                 }])
@@ -27,18 +27,18 @@ class RecipeGroupsController extends Controller
 
             return response()->json([
                 'data' => $groups,
-                'recipe' => $recipe
+                'user_meal' => $userMeal
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to fetch recipe groups', ['error' => $e->getMessage()]);
+            Log::error('Failed to fetch user meal groups', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to fetch groups.'], 500);
         }
     }
 
     /**
-     * Create a new group for a recipe
+     * Create a new group for a user meal
      */
-    public function store(Request $request, $recipeId): JsonResponse
+    public function store(Request $request, $userMealId): JsonResponse
     {
         try {
             $userData = json_decode($request->header('X-User-Data'), true);
@@ -46,25 +46,21 @@ class RecipeGroupsController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            if (!$this->validateIsAdminWithClerk($userData['id'])) {
-                return response()->json(['error' => 'Unauthorized.'], 403);
-            }
-
             $validated = $request->validate([
-                'name' => 'required|string|max:100|unique:recipe_groups,name,NULL,id,recipe_id,' . $recipeId,
+                'name' => 'required|string|max:100|unique:user_meal_groups,name,NULL,id,user_meal_id,' . $userMealId,
                 'description' => 'nullable|string|max:500',
                 'sort_order' => 'nullable|integer',
             ]);
 
-            $recipe = Recipe::findOrFail($recipeId);
+            $userMeal = UserMeal::findOrFail($userMealId);
 
             // If no sort_order provided, put it at the end
             if (!isset($validated['sort_order'])) {
-                $validated['sort_order'] = RecipeGroup::where('recipe_id', $recipeId)->count();
+                $validated['sort_order'] = UserMealGroup::where('user_meal_id', $userMealId)->count();
             }
 
-            $group = RecipeGroup::create([
-                'recipe_id' => $recipeId,
+            $group = UserMealGroup::create([
+                'user_meal_id' => $userMealId,
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'sort_order' => $validated['sort_order'],
@@ -80,7 +76,7 @@ class RecipeGroupsController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            Log::error('Failed to create recipe group', ['error' => $e->getMessage()]);
+            Log::error('Failed to create user meal group', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to create group.'], 500);
         }
     }
@@ -88,7 +84,7 @@ class RecipeGroupsController extends Controller
     /**
      * Update an existing group
      */
-    public function update(Request $request, $recipeId, $groupId): JsonResponse
+    public function update(Request $request, $userMealId, $groupId): JsonResponse
     {
         try {
             $userData = json_decode($request->header('X-User-Data'), true);
@@ -96,17 +92,13 @@ class RecipeGroupsController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            if (!$this->validateIsAdminWithClerk($userData['id'])) {
-                return response()->json(['error' => 'Unauthorized.'], 403);
-            }
-
             $validated = $request->validate([
-                'name' => 'required|string|max:100|unique:recipe_groups,name,' . $groupId . ',id,recipe_id,' . $recipeId,
+                'name' => 'required|string|max:100|unique:user_meal_groups,name,' . $groupId . ',id,user_meal_id,' . $userMealId,
                 'description' => 'nullable|string|max:500',
                 'sort_order' => 'nullable|integer',
             ]);
 
-            $group = RecipeGroup::where('recipe_id', $recipeId)->findOrFail($groupId);
+            $group = UserMealGroup::where('user_meal_id', $userMealId)->findOrFail($groupId);
             $group->update($validated);
 
             return response()->json([
@@ -119,7 +111,7 @@ class RecipeGroupsController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            Log::error('Failed to update recipe group', ['error' => $e->getMessage()]);
+            Log::error('Failed to update user meal group', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to update group.'], 500);
         }
     }
@@ -127,7 +119,7 @@ class RecipeGroupsController extends Controller
     /**
      * Delete a group and move its recipe lines to ungrouped
      */
-    public function destroy(Request $request, $recipeId, $groupId): JsonResponse
+    public function destroy(Request $request, $userMealId, $groupId): JsonResponse
     {
         try {
             $userData = json_decode($request->header('X-User-Data'), true);
@@ -135,14 +127,10 @@ class RecipeGroupsController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            if (!$this->validateIsAdminWithClerk($userData['id'])) {
-                return response()->json(['error' => 'Unauthorized.'], 403);
-            }
+            $group = UserMealGroup::where('user_meal_id', $userMealId)->findOrFail($groupId);
 
-            $group = RecipeGroup::where('recipe_id', $recipeId)->findOrFail($groupId);
-
-            // Move all recipe lines to ungrouped (set recipe_group_id to null)
-            $group->recipeLines()->update(['recipe_group_id' => null]);
+            // Move all recipe lines to ungrouped (set user_meal_group_id to null)
+            $group->recipeLines()->update(['user_meal_group_id' => null]);
 
             // Delete the group
             $group->delete();
@@ -150,7 +138,7 @@ class RecipeGroupsController extends Controller
             return response()->json(['message' => 'Group deleted successfully.']);
 
         } catch (\Exception $e) {
-            Log::error('Failed to delete recipe group', ['error' => $e->getMessage()]);
+            Log::error('Failed to delete user meal group', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to delete group.'], 500);
         }
     }
@@ -158,7 +146,7 @@ class RecipeGroupsController extends Controller
     /**
      * Reorder groups
      */
-    public function reorder(Request $request, $recipeId): JsonResponse
+    public function reorder(Request $request, $userMealId): JsonResponse
     {
         try {
             $userData = json_decode($request->header('X-User-Data'), true);
@@ -166,18 +154,14 @@ class RecipeGroupsController extends Controller
                 return response()->json(['error' => 'User data not provided.'], 401);
             }
 
-            if (!$this->validateIsAdminWithClerk($userData['id'])) {
-                return response()->json(['error' => 'Unauthorized.'], 403);
-            }
-
             $validated = $request->validate([
                 'groups' => 'required|array',
-                'groups.*.id' => 'required|exists:recipe_groups,id',
+                'groups.*.id' => 'required|exists:user_meal_groups,id',
                 'groups.*.sort_order' => 'required|integer',
             ]);
 
             foreach ($validated['groups'] as $groupData) {
-                RecipeGroup::where('recipe_id', $recipeId)
+                UserMealGroup::where('user_meal_id', $userMealId)
                     ->where('id', $groupData['id'])
                     ->update(['sort_order' => $groupData['sort_order']]);
             }
@@ -187,45 +171,44 @@ class RecipeGroupsController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            Log::error('Failed to reorder recipe groups', ['error' => $e->getMessage()]);
+            Log::error('Failed to reorder user meal groups', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to reorder groups.'], 500);
         }
     }
 
     /**
-     * Get recipe with all groups and ungrouped lines
+     * Get user meal with all groups and ungrouped lines
      */
-    public function getRecipeWithGroups(Request $request, $recipe): JsonResponse
+    public function getUserMealWithGroups(Request $request, $userMealId): JsonResponse
     {
         try {
-            $recipeModel = Recipe::with([
+            $userData = json_decode($request->header('X-User-Data'), true);
+            if (!$userData || !isset($userData['id'])) {
+                return response()->json(['error' => 'User data not provided.'], 401);
+            }
+
+            $userMeal = UserMeal::with([
                 'recipeGroups' => function ($query) {
                     $query->ordered()->with(['recipeLines' => function ($lineQuery) {
                         $lineQuery->with('ingredient', 'measurement')->orderBy('sort_order');
                     }]);
                 }
-            ])->findOrFail($recipe);
+            ])->findOrFail($userMealId);
 
             // Get ungrouped recipe lines using the new scope
-            $recipeModel->ungrouped_recipe_lines = \App\Models\RecipeLine::where('recipe_id', $recipe)
-                ->ungroupedRecipe()
+            $userMeal->ungrouped_recipe_lines = \App\Models\RecipeLine::where('user_meal_id', $userMealId)
+                ->ungroupedUserMeal()
                 ->get();
 
             // Get all recipe lines for convenience
-            $recipeModel->all_recipe_lines = \App\Models\RecipeLine::where('recipe_id', $recipe)
-                ->groupedByRecipeGroup()
+            $userMeal->all_recipe_lines = \App\Models\RecipeLine::where('user_meal_id', $userMealId)
+                ->groupedByUserMealGroup()
                 ->get();
 
-            return response()->json(['data' => $recipeModel]);
+            return response()->json(['data' => $userMeal]);
         } catch (\Exception $e) {
-            Log::error('Failed to fetch recipe with groups', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Failed to fetch recipe with groups.'], 500);
+            Log::error('Failed to fetch user meal with groups', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to fetch user meal with groups.'], 500);
         }
-    }
-
-    private function validateIsAdminWithClerk(string $userId): bool
-    {
-        // Your existing Clerk validation logic
-        return true; // Placeholder
     }
 }

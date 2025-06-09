@@ -18,6 +18,7 @@ class RecipeLine extends Model
         'measurement_id',
         'notes',
         'recipe_group_id',
+        'user_meal_group_id',
         'sort_order',
     ];
 
@@ -55,11 +56,84 @@ class RecipeLine extends Model
         return $this->belongsTo(RecipeGroup::class);
     }
 
-    /**
-     * Scope to get recipe lines grouped by group_name
-     */
-    public function scopeGrouped($query)
+    public function userMealGroup(): BelongsTo
     {
-        return $query->with('recipeGroup')->orderBy('recipe_group_id')->orderBy('sort_order');
+        return $this->belongsTo(UserMealGroup::class);
+    }
+
+    /**
+     * Scope to get recipe lines grouped by recipe group (for recipes)
+     */
+    public function scopeGroupedByRecipeGroup($query)
+    {
+        return $query->with(['recipeGroup', 'ingredient', 'measurement'])
+            ->orderBy('recipe_group_id')
+            ->orderBy('sort_order');
+    }
+
+    /**
+     * Scope to get recipe lines grouped by user meal group (for user meals)
+     */
+    public function scopeGroupedByUserMealGroup($query)
+    {
+        return $query->with(['userMealGroup', 'ingredient', 'measurement'])
+            ->orderBy('user_meal_group_id')
+            ->orderBy('sort_order');
+    }
+
+    /**
+     * General scope for grouped recipe lines that works for both contexts
+     */
+    public function scopeGrouped($query, $type = 'recipe')
+    {
+        if ($type === 'userMeal') {
+            return $this->scopeGroupedByUserMealGroup($query);
+        }
+
+        return $this->scopeGroupedByRecipeGroup($query);
+    }
+
+    /**
+     * Scope to get ungrouped recipe lines for recipes
+     */
+    public function scopeUngroupedRecipe($query)
+    {
+        return $query->whereNull('recipe_group_id')
+            ->with(['ingredient', 'measurement'])
+            ->orderBy('sort_order');
+    }
+
+    /**
+     * Scope to get ungrouped recipe lines for user meals
+     */
+    public function scopeUngroupedUserMeal($query)
+    {
+        return $query->whereNull('user_meal_group_id')
+            ->with(['ingredient', 'measurement'])
+            ->orderBy('sort_order');
+    }
+
+    /**
+     * Get the group name for this recipe line (works for both contexts)
+     */
+    public function getGroupNameAttribute(): ?string
+    {
+        if ($this->recipe_group_id && $this->recipeGroup) {
+            return $this->recipeGroup->name;
+        }
+
+        if ($this->user_meal_group_id && $this->userMealGroup) {
+            return $this->userMealGroup->name;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the group ID for this recipe line (works for both contexts)
+     */
+    public function getGroupIdAttribute(): ?int
+    {
+        return $this->recipe_group_id ?? $this->user_meal_group_id;
     }
 }

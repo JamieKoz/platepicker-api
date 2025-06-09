@@ -14,6 +14,8 @@ use App\Http\Controllers\IngredientController;
 use App\Http\Controllers\MeasurementController;
 use App\Http\Controllers\RecipeGroupsController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserMealGroupsController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -39,6 +41,15 @@ Route::post('/user-meals/add-from-recipe/{id}', [UserMealController::class, 'add
 Route::delete('/user-meals/{id}', [UserMealController::class, 'destroy']);
 Route::post('/user-meals/{id}/increment-tally', [TallyController::class, 'incrementTally']);
 
+Route::prefix('user-meals/{userMealId}')->group(function () {
+    Route::get('/groups', [UserMealGroupsController::class, 'index']);
+    Route::get('/groups/complete', [UserMealGroupsController::class, 'getUserMealWithGroups']);
+    Route::post('/groups', [UserMealGroupsController::class, 'store']);
+    Route::put('/groups/{group}', [UserMealGroupsController::class, 'update']);
+    Route::delete('/groups/{group}', [UserMealGroupsController::class, 'destroy']);
+    Route::post('/groups/reorder', [UserMealGroupsController::class, 'reorder']);
+});
+
 Route::get('/restaurants/nearby', [RestaurantController::class, 'getNearbyRestaurants']);
 Route::get('/restaurants/address-suggestions', [RestaurantController::class, 'getAddressSuggestions']);
 Route::get('/restaurants/reverse-geocode', [RestaurantController::class, 'reverseGeocode']);
@@ -58,6 +69,7 @@ Route::get('/recipes/{id}', [BaseRecipeController::class, 'show']);
 
 Route::prefix('recipes/{recipe}')->group(function () {
     Route::get('/groups', [RecipeGroupsController::class, 'index']);
+    Route::get('/groups/complete', [RecipeGroupsController::class, 'getRecipeWithGroups']);
     Route::post('/groups', [RecipeGroupsController::class, 'store']);
     Route::put('/groups/{group}', [RecipeGroupsController::class, 'update']);
     Route::delete('/groups/{group}', [RecipeGroupsController::class, 'destroy']);
