@@ -130,15 +130,33 @@ class UserMealService
         $userMeal->cooking_time = $data['cooking_time'];
         $userMeal->serves = $data['serves'];
         $userMeal->active = true;
-
         if (isset($data['image'])) {
-            $imageName = preg_replace('/\.(jpg|jpeg|png|gif)$/i', '', $data['image']->getClientOriginalName());
-            $imageName = preg_replace('/[^a-zA-Z0-9-_]/', '-', $imageName);
-            $data['image']->storeAs('food-images', $imageName, 's3');
-            $userMeal->image_name = $imageName;
+            // For new user meals, generate a temporary name that we'll update after save
+            $tempName = 'temp-' . uniqid();
+            $extension = $data['image']->getClientOriginalExtension();
+            $tempFullName = $tempName . '.' . $extension;
+
+            $data['image']->storeAs('user-meal-images', $tempFullName, 's3');
+            $userMeal->image_name = $tempName;
         }
 
         $userMeal->save();
+
+        // After save, update with proper name if image was uploaded
+        if (isset($data['image'])) {
+            $properName = 'user-meal-' . $userMeal->id . '-' . time();
+            $extension = $data['image']->getClientOriginalExtension();
+
+            // Copy to proper name and delete temp
+            Storage::disk('s3')->copy(
+                'user-meal-images/' . $userMeal->image_name . '.' . $extension,
+                'user-meal-images/' . $properName . '.' . $extension
+            );
+            Storage::disk('s3')->delete('user-meal-images/' . $userMeal->image_name . '.' . $extension);
+
+            $userMeal->image_name = $properName;
+            $userMeal->save();
+        }
 
         // Attach relationships
         if (isset($data['categories']) && is_array($data['categories'])) {
@@ -178,13 +196,19 @@ class UserMealService
         ]);
 
         if (isset($data['image'])) {
+            // Delete old image if it exists
             if ($userMeal->image_name) {
-                Storage::disk('s3')->delete('food-images/' . $userMeal->image_name);
+                Storage::disk('s3')->delete('user-meal-images/' . $userMeal->image_name);
             }
-            $imageName = preg_replace('/\.(jpg|jpeg|png|gif)$/i', '', $data['image']->getClientOriginalName());
-            $imageName = preg_replace('/[^a-zA-Z0-9-_]/', '-', $imageName);
-            $data['image']->storeAs('food-images', $imageName, 's3');
-            $userMeal->image_name = $imageName;
+
+            // Generate unique filename for user meals
+            $imageName = 'user-meal-' . $userMeal->id . '-' . time();
+            $extension = $data['image']->getClientOriginalExtension();
+            $fullImageName = $imageName . '.' . $extension;
+
+            // Store in user-meal-images folder
+            $data['image']->storeAs('user-meal-images', $fullImageName, 's3');
+            $userMeal->image_name = $imageName; // Store without extension
         }
 
         $userMeal->save();

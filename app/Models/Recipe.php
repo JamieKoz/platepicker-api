@@ -41,6 +41,8 @@ class Recipe extends Model
         'updated_at' => 'datetime',
     ];
 
+    protected $appends = ['image_url'];
+
     public function users()
     {
         return $this->belongsToMany(User::class, 'user_meals')
@@ -93,5 +95,12 @@ class Recipe extends Model
         return $this->hasMany(RecipeLine::class)
             ->whereNull('recipe_group_id')
             ->orderBy('sort_order');
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image_name) return null;
+
+        return getenv('CLOUDFRONT_URL') . "/food-images/{$this->image_name}.jpg";
     }
 }
