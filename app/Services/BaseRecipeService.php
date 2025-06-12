@@ -8,8 +8,8 @@ use App\Models\Recipe;
 use App\Models\RecipeGroup;
 use App\Models\RecipeLine;
 use App\Models\UserMeal;
+use App\Models\UserMealGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -22,13 +22,24 @@ class BaseRecipeService
 
         // Only assign meals if the user doesn't have any yet
         if (!$existingMeals) {
-            $defaultRecipes = Recipe::where('active', 1)
+            $defaultRecipes = Recipe::with([
+                'recipeLines.ingredient',
+                'recipeLines.measurement',
+                'recipeGroups',
+                'categories',
+                'cuisines',
+                'dietary'
+            ])
+                ->where('active', 1)
                 ->take(30)
                 ->get();
+
             foreach ($defaultRecipes as $recipe) {
-                UserMeal::firstOrCreate([
+                // Create the user meal
+                $userMeal = UserMeal::firstOrCreate([
                     'user_id' => $userId,
                     'recipe_id' => $recipe->id,
+                ], [
                     'active' => true,
                     'title' => $recipe->title,
                     'instructions' => $recipe->instructions,
@@ -36,6 +47,56 @@ class BaseRecipeService
                     'cooking_time' => $recipe->cooking_time,
                     'serves' => $recipe->serves,
                 ]);
+
+                // Copy categories (only if they exist)
+                if ($recipe->categories && $recipe->categories->isNotEmpty()) {
+                    $categoryIds = $recipe->categories->pluck('id')->toArray();
+                    $userMeal->categories()->sync($categoryIds);
+                }
+
+                // Copy cuisines (only if they exist)
+                if ($recipe->cuisines && $recipe->cuisines->isNotEmpty()) {
+                    $cuisineIds = $recipe->cuisines->pluck('id')->toArray();
+                    $userMeal->cuisines()->sync($cuisineIds);
+                }
+
+                // Copy dietary (only if they exist)
+                if ($recipe->dietary && $recipe->dietary->isNotEmpty()) {
+                    $dietaryIds = $recipe->dietary->pluck('id')->toArray();
+                    $userMeal->dietary()->sync($dietaryIds);
+                }
+
+                // Copy recipe groups to user meal groups
+                $groupMapping = [];
+                if ($recipe->recipeGroups && $recipe->recipeGroups->isNotEmpty()) {
+                    foreach ($recipe->recipeGroups as $recipeGroup) {
+                        $userMealGroup = UserMealGroup::create([
+                            'user_meal_id' => $userMeal->id,
+                            'name' => $recipeGroup->name,
+                            'description' => $recipeGroup->description,
+                            'sort_order' => $recipeGroup->sort_order,
+                        ]);
+
+                        $groupMapping[$recipeGroup->id] = $userMealGroup->id;
+                    }
+                }
+
+                // Copy recipe lines to user meal lines
+                if ($recipe->recipeLines && $recipe->recipeLines->isNotEmpty()) {
+                    foreach ($recipe->recipeLines as $recipeLine) {
+                        RecipeLine::create([
+                            'user_meal_id' => $userMeal->id,
+                            'ingredient_id' => $recipeLine->ingredient_id,
+                            'quantity' => $recipeLine->quantity,
+                            'measurement_id' => $recipeLine->measurement_id,
+                            'notes' => $recipeLine->notes,
+                            'sort_order' => $recipeLine->sort_order,
+                            'user_meal_group_id' => $recipeLine->recipe_group_id && isset($groupMapping[$recipeLine->recipe_group_id])
+                                ? $groupMapping[$recipeLine->recipe_group_id]
+                                : null,
+                        ]);
+                    }
+                }
             }
         }
     }
