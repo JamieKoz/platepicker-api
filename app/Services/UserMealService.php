@@ -75,7 +75,8 @@ class UserMealService
             'dietary',
             'recipe',
             'recipeLines.ingredient',
-            'recipeLines.measurement'
+            'recipeLines.measurement',
+            'userMealGroups'
         ])
         ->select('user_meals.*')
         ->where('user_meals.active', 1)
@@ -116,6 +117,7 @@ class UserMealService
 
         foreach ($recipes as $recipe) {
             $recipe->image_url = config('cloudfront.url') . '/food-images/' . $recipe->image_name;
+            $recipe->user_meal_groups = $recipe->userMealGroups;
         }
 
         return $recipes;
@@ -289,10 +291,10 @@ class UserMealService
         $userMeal->save();
     }
 
-        public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
+    public function getRecipeList(string $authId, string $activeDirection = 'desc', string $titleDirection = 'asc'): LengthAwarePaginator
     {
         return UserMeal::with(['categories', 'cuisines', 'dietary', 'recipeLines.ingredient', 'recipeLines.measurement'])
-            ->where('user_id', $authId)
+        ->where('user_id', $authId)
             ->orderBy('active', $activeDirection)
             ->orderBy('title', $titleDirection)
             ->paginate(self::USER_MEALS_PER_PAGE);
