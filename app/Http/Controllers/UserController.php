@@ -30,7 +30,7 @@ class UserController extends Controller
         } else {
             // Create new user
             $user = new User();
-            $user->auth_id = $request->clerkId;
+            $user->auth_id = $request->id;
             $user->name = $request->name;
             $user->email = $request->email;
             $user->password = Hash::make(Str::random(24));
