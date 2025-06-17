@@ -41,12 +41,16 @@ class RestaurantController extends Controller
     public function getNearbyRestaurants(Request $request)
     {
         $placeId = $request->query('place_id');
-        $diningOption = $request->query('dining_option', 'delivery'); // Default to delivery
+        $diningOption = $request->query('dining_option', '');
+        $keyword = $request->query('keyword');
 
         $cacheKey = "restaurants_{$placeId}_{$diningOption}";
-        /* if (Cache::has($cacheKey)) { */
-        /*     return response()->json(Cache::get($cacheKey)); */
-        /* } */
+        if ($keyword) {
+            $cacheKey .= "_" . md5($keyword);
+        }
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
 
         // Get location first
         $placeResponse = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
@@ -66,7 +70,8 @@ class RestaurantController extends Controller
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
             (string)$location['lat'],
             (string)$location['lng'],
-            $diningOption
+            $diningOption,
+            $keyword // Pass the keyword
         );
 
         // Convert collection to array before processing
@@ -102,8 +107,9 @@ class RestaurantController extends Controller
     {
         $lat = $request->query('lat');
         $lng = $request->query('lng');
-        $diningOption = $request->query('dining_option', 'delivery'); // Default to delivery
+        $diningOption = $request->query('dining_option', '');
 
+        $keyword = $request->query('keyword');
         if (!$lat || !$lng) {
             return response()->json([
                 'error' => 'Latitude and longitude are required'
@@ -111,14 +117,19 @@ class RestaurantController extends Controller
         }
 
         $cacheKey = "restaurants_geocode_{$lat}_{$lng}_{$diningOption}";
-        /* if (Cache::has($cacheKey)) { */
-        /*     return response()->json(Cache::get($cacheKey)); */
-        /* } */
+        if ($keyword) {
+            $cacheKey .= "_" . md5($keyword);
+        }
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
+
 
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
             (string)$lat,
             (string)$lng,
-            $diningOption
+            $diningOption,
+            $keyword
         );
 
         // Convert collection to array before processing

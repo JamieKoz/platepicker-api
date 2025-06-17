@@ -70,9 +70,9 @@ class AddIndexesToTables extends Migration
 
         // Add indexes for user meal-dietary relationships
         Schema::table('user_meals_dietary', function (Blueprint $table) {
-            $table->index('user_meal_id', 'user_meals_dietary_user_meal_id_index');
+            $table->index('user_meals_id', 'user_meals_dietary_user_meal_id_index');
             $table->index('dietary_id', 'user_meals_dietary_dietary_id_index');
-            $table->unique(['user_meal_id', 'dietary_id'], 'user_meals_dietary_user_meal_dietary_unique');
+            $table->unique(['user_meals_id', 'dietary_id'], 'user_meals_dietary_user_meal_dietary_unique');
         });
 
         // Add indexes for user meal categories

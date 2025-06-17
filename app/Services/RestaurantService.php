@@ -3,41 +3,18 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class RestaurantService
 {
-    private const TARGET_RESULTS = 27;
-    private const MAX_PAGES = 3;
-    private const FULL_PHOTO_COUNT = 5; // Maximum photos to fetch per restaurant
-
-    private array $blacklistedTerms = [
-        'bp',
-        'bp truckstop',
-        '7-eleven',
-        'hotel',
-        'motel',
-        'lodge',
-        'airport',
-        'convenience store',
-        'gas station',
-        'service station',
-        'childcare',
-        'child care',
-        'day care',
-        'daycare'
-    ];
-
-    private array $validRestaurantTypes = ['restaurant', 'cafe', 'meal_takeaway', 'food', 'hamburger', 'greek'];
+    private const FULL_PHOTO_COUNT = 5;
 
     /**
      * Fetch and process restaurants with minimal image data initially
      */
-    public function fetchAndProcessRestaurants(string $lat, string $lng, string $diningOption = 'delivery'): array
+    public function fetchAndProcessRestaurants(string $lat, string $lng, string $diningOption = '', ?string $customKeyword = null): array
     {
-        // Maximum number of restaurants to return
         $MAX_RESTAURANTS = 25;
 
         $allResults = [];
@@ -45,7 +22,7 @@ class RestaurantService
         $maxPages = 2; // Limit to 2 pages to avoid excessive API calls
 
         for ($i = 0; $i < $maxPages; $i++) {
-            $response = $this->fetchPage($lat, $lng, $diningOption, $pageToken);
+            $response = $this->fetchPage($lat, $lng, $diningOption, $customKeyword, $pageToken);
 
             if ($response['status'] !== 'OK') {
                 break;
@@ -80,7 +57,6 @@ class RestaurantService
                 continue;
             }
 
-            // Transform the data into our desired format
             $restaurant = [
                 'name' => $place['name'],
                 'place_id' => $place['place_id'],
@@ -148,15 +124,8 @@ class RestaurantService
                 'key' => config('services.google.maps_api_key')
             ])->json();
 
-            // Log the raw response for debugging
-            Log::debug('Place details response', [
-                'place_id' => $placeId,
-                'response' => $details
-            ]);
 
             if (!isset($details['result']['photos']) || empty($details['result']['photos'])) {
-                // Log missing photos and return empty array
-                Log::info('No photos found for place', ['place_id' => $placeId]);
                 Cache::put($cacheKey, [], now()->addHour()); // Cache empty result for shorter time
                 return [];
             }
@@ -174,7 +143,7 @@ class RestaurantService
                 ->values()
                 ->all();
 
-            Cache::put($cacheKey, $photoReferences, now()->addDay());
+            Cache::put($cacheKey, $photoReferences, now()->addMonth());
             return $photoReferences;
         } catch (\Exception $e) {
             Log::error('Error fetching additional photos', [
@@ -185,34 +154,41 @@ class RestaurantService
         }
     }
 
-    private function fetchPage(string $lat, string $lng, string $diningOption = 'delivery', ?string $pageToken = null): array
+    private function fetchPage(string $lat, string $lng, string $diningOption = 'delivery', ?string $customKeyword = null, ?string $pageToken = null): array
     {
-        $cacheKey = "get_geocode_{$lat}_{$lng}_{$diningOption}" . ($pageToken ? "_page_" . substr($pageToken, 0, 10) : "");
-        /* if (Cache::has($cacheKey)) { */
-        /*     return Cache::get($cacheKey); */
-        /* } */
+        $cacheKey = "get_geocode_{$lat}_{$lng}_{$diningOption}";
+        if ($customKeyword) {
+            $cacheKey .= "_" . md5($customKeyword);
+        }
+        if ($pageToken) {
+            $cacheKey .= "_page_" . substr($pageToken, 0, 10);
+        }
 
-        // Determine keywords based on dining option
-        $keyword = 'opennow';
-        $searchType = 'restaurant';
-        switch ($diningOption) {
-            case 'bars':
-                $keyword = 'bar, pub, alcohol, opennow';
-                $searchType = 'bar';
-                break;
-            case 'dine_in':
-                $keyword = 'food, fastfood, reservable, cafe, opennow';
-                break;
-            case 'takeaway':
-                $keyword = 'delivery, fastfood, takeaway, opennow';
-                break;
-            case 'drive_thru':
-                $keyword = 'delivery, fastfood, drivethru, opennow';
-                break;
-            case 'delivery':
-            default:
-                $keyword = 'delivery, opennow';
-                break;
+        if ($diningOption === 'custom' && $customKeyword) {
+            $keyword = $customKeyword . ', restaurant, food';
+            $searchType = 'restaurant';
+        } else {
+            $keyword = 'opennow';
+            $searchType = 'restaurant';
+            switch ($diningOption) {
+                case 'bars':
+                    $keyword = 'bar, pub, alcohol, opennow';
+                    $searchType = 'bar';
+                    break;
+                case 'dine_in':
+                    $keyword = 'food, fastfood, reservable, cafe, opennow';
+                    break;
+                case 'takeaway':
+                    $keyword = 'delivery, fastfood, takeaway, opennow';
+                    break;
+                case 'drive_thru':
+                    $keyword = 'delivery, fastfood, drivethru, opennow';
+                    break;
+                case 'delivery':
+                default:
+                    $keyword = 'delivery, opennow';
+                    break;
+            }
         }
 
         $params = [
@@ -223,20 +199,15 @@ class RestaurantService
             'key' => config('services.google.maps_api_key')
         ];
 
-        // Add page token if we have one
         if ($pageToken) {
             $params['pagetoken'] = $pageToken;
         }
 
-        // Log the request for debugging
-        Log::info('Fetching restaurants with params', ['dining_option' => $diningOption, 'keyword' => $keyword]);
-
         $response = Http::get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', $params);
         $googleResponse = $response->json();
 
-        // Only cache successful responses
         if ($googleResponse['status'] === 'OK') {
-            Cache::put($cacheKey, $googleResponse, now()->addHour());
+            Cache::put($cacheKey, $googleResponse, now()->addMonth());
         } else {
             Log::error('Google Places API Error', [
                 'status' => $googleResponse['status'] ?? 'unknown',
@@ -248,116 +219,4 @@ class RestaurantService
         return $googleResponse;
     }
 
-    private function filterValidRestaurants(array $results): Collection
-    {
-        return collect($results)->filter(function ($restaurant) {
-            return $this->isValidRestaurantType($restaurant) && !$this->containsBlacklistedTerm($restaurant);
-        });
-    }
-
-    private function isValidRestaurantType(array $restaurant): bool
-    {
-        return collect($restaurant['types'] ?? [])->contains(function ($type) {
-            return in_array($type, $this->validRestaurantTypes);
-        });
-    }
-
-    private function containsBlacklistedTerm(array $restaurant): bool
-    {
-        return collect($this->blacklistedTerms)->contains(function ($term) use ($restaurant) {
-            return str_contains(strtolower($restaurant['name']), $term);
-        });
-    }
-
-    private function removeDuplicates(Collection $restaurants): Collection
-    {
-        $uniqueRestaurants = collect([]);
-        $blocklist = [];
-
-        foreach ($restaurants as $restaurant) {
-            $name = $restaurant['name'];
-            $vicinity = $restaurant['vicinity'];
-
-            // Strip vicinity from name if present
-            $strippedName = $this->stripVicinityFromName($name, $vicinity);
-            $hash = md5(strtolower($strippedName));
-
-            if (!in_array($hash, $blocklist)) {
-                $blocklist[] = $hash;
-                $uniqueRestaurants->push($restaurant);
-            }
-        }
-        return $uniqueRestaurants;
-    }
-
-    private function stripVicinityFromName(string $name, string $vicinity): string
-    {
-        // Split vicinity into words and remove each from the name if present
-        $vicinityParts = explode(' ', $vicinity);
-        $cleanName = $name;
-
-        foreach ($vicinityParts as $part) {
-            $cleanName = str_ireplace($part, '', $cleanName);
-        }
-
-        return trim($cleanName);
-    }
-
-    /**
-     * Add just ONE photo per restaurant for initial fast response
-     */
-    private function enrichWithInitialPhoto(Collection $restaurants): Collection
-    {
-        return $restaurants->map(function ($restaurant) {
-            // Use photo from the initial API response if available
-            $initialPhoto = isset($restaurant['photos'][0]) ? $restaurant['photos'][0] : null;
-
-            // Check if we need to indicate more photos are available
-            $hasMorePhotos = count($restaurant['photos'] ?? []) > 1;
-
-            return [
-                'place_id' => $restaurant['place_id'],
-                'name' => $restaurant['name'],
-                'vicinity' => $restaurant['vicinity'],
-                'rating' => $restaurant['rating'] ?? null,
-                'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
-                'price_level' => $restaurant['price_level'] ?? null,
-                'primary_photo' => $initialPhoto, // Just include one photo initially
-                'has_additional_photos' => $hasMorePhotos, // Flag to indicate more photos exist
-                'opening_hours' => $restaurant['opening_hours'] ?? null,
-            ];
-        });
-    }
-
-    /**
-     * Original full enrichment with photos - use this for the additional photos endpoint
-     */
-    private function enrichWithPhotos(Collection $restaurants): Collection
-    {
-        return $restaurants->map(function ($restaurant) {
-            $details = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
-                'place_id' => $restaurant['place_id'],
-                'fields' => 'photos',
-                'key' => config('services.google.maps_api_key')
-            ])->json();
-
-            $photos = collect($details['result']['photos'] ?? [])
-                ->merge($restaurant['photos'] ?? [])
-                ->unique('photo_reference')
-                ->take(self::FULL_PHOTO_COUNT)
-                ->values()
-                ->all();
-
-            return [
-                'place_id' => $restaurant['place_id'],
-                'name' => $restaurant['name'],
-                'vicinity' => $restaurant['vicinity'],
-                'rating' => $restaurant['rating'] ?? null,
-                'user_ratings_total' => $restaurant['user_ratings_total'] ?? 0,
-                'price_level' => $restaurant['price_level'] ?? null,
-                'photos' => $photos,
-                'opening_hours' => $restaurant['opening_hours'] ?? null,
-            ];
-        });
-    }
 }
