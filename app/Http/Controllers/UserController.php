@@ -18,30 +18,27 @@ class UserController extends Controller
             'imageUrl' => 'nullable|string',
         ]);
 
-        // Check if user already exists by auth_id (Clerk ID)
-        $user = User::where('auth_id', $request->id)->first();
+        try {
+            $user = User::updateOrCreate(
+                ['auth_id' => $request->id],
+                [
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'password' => Hash::make(Str::random(24)),
+                    'is_active' => 1,
+                    'is_admin' => $request->has('isAdmin') ? ($request->isAdmin ? 1 : 0) : 0,
+                ]
+            );
 
-        if ($user) {
-            // Update existing user
-            $user->update([
-                'name' => $request->name,
-                'email' => $request->email,
-            ]);
-        } else {
-            // Create new user
-            $user = new User();
-            $user->auth_id = $request->id;
-            $user->name = $request->name;
-            $user->email = $request->email;
-            $user->password = Hash::make(Str::random(24));
-            $user->is_active = 1;
-            $user->is_admin = $request->has('isAdmin') ? ($request->isAdmin ? 1 : 0) : 0;
-            $user->save();
+            return response()->json([
+                'message' => 'User registered/updated successfully',
+                'user' => $user,
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error registering user',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'message' => 'User registered/updated successfully',
-            'user' => $user,
-        ], 201);
     }
 }

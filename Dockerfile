@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     vim \
+    git \
     && docker-php-ext-install pdo pdo_sqlite pdo_pgsql \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
