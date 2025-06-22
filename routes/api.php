@@ -118,3 +118,4 @@ Route::put('/feedback/{id}', [FeedbackController::class, 'update']);
 
 // routes/api.php
 Route::post('/users/register-clerk-user', [UserController::class, 'store']);
+Route::get('/restaurants/details/{placeId}', [RestaurantController::class, 'getRestaurantDetails']);

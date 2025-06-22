@@ -219,4 +219,30 @@ class RestaurantService
         return $googleResponse;
     }
 
+    public function getRestaurantDetails(string $placeId): array
+    {
+        $cacheKey = "restaurant_details_{$placeId}";
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+        try {
+            $response = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
+                'place_id' => $placeId,
+                'fields' => 'name,rating,formatted_phone_number,geometry,opening_hours,photos,reviews,website,formatted_address,price_level,user_ratings_total',
+                'key' => config('services.google.maps_api_key')
+            ]);
+            $details = $response->json();
+            if ($details['status'] === 'OK') {
+                Cache::put($cacheKey, $details['result'], now()->addHours(6));
+                return $details['result'];
+            }
+            throw new \Exception('Failed to fetch restaurant details');
+        } catch (\Exception $e) {
+            Log::error('Error fetching restaurant details', [
+                'place_id' => $placeId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
 }

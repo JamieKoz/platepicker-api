@@ -265,4 +265,17 @@ class RestaurantController extends Controller
             return response()->json(['error' => 'Error fetching photo'], 500);
         }
     }
+
+    public function getRestaurantDetails($placeId)
+    {
+        try {
+            $details = $this->restaurantService->getRestaurantDetails($placeId);
+            return response()->json($details);
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'error' => 'Failed to fetch restaurant details'
+            ], 500);
+        }
+    }
 }
