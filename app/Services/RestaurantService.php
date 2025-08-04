@@ -15,7 +15,7 @@ class RestaurantService
      */
     public function fetchAndProcessRestaurants(string $lat, string $lng, string $diningOption = '', ?string $customKeyword = null): array
     {
-        $MAX_RESTAURANTS = 25;
+        $MAX_RESTAURANTS = 15;
 
         $allResults = [];
         $pageToken = null;

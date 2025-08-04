@@ -43,11 +43,17 @@ class RestaurantController extends Controller
         $placeId = $request->query('place_id');
         $diningOption = $request->query('dining_option', '');
         $keyword = $request->query('keyword');
+        $dietary = $request->query('dietary');
 
         $cacheKey = "restaurants_{$placeId}_{$diningOption}";
         if ($keyword) {
             $cacheKey .= "_" . md5($keyword);
         }
+
+        if ($dietary) {
+            $cacheKey .= "_dietary_" . md5($dietary);
+        }
+
         if (Cache::has($cacheKey)) {
             return response()->json(Cache::get($cacheKey));
         }
@@ -67,11 +73,13 @@ class RestaurantController extends Controller
         }
 
         $location = $placeData['result']['geometry']['location'];
+        $dietaryArray = $dietary ? explode(',', $dietary) : [];
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
             (string)$location['lat'],
             (string)$location['lng'],
             $diningOption,
-            $keyword // Pass the keyword
+            $keyword,
+            $dietaryArray
         );
 
         // Convert collection to array before processing
@@ -108,6 +116,7 @@ class RestaurantController extends Controller
         $lat = $request->query('lat');
         $lng = $request->query('lng');
         $diningOption = $request->query('dining_option', '');
+        $dietary = $request->query('dietary');
 
         $keyword = $request->query('keyword');
         if (!$lat || !$lng) {
@@ -120,16 +129,20 @@ class RestaurantController extends Controller
         if ($keyword) {
             $cacheKey .= "_" . md5($keyword);
         }
+        if ($dietary) {
+            $cacheKey .= "_dietary_" . md5($dietary);
+        }
         if (Cache::has($cacheKey)) {
             return response()->json(Cache::get($cacheKey));
         }
 
-
+        $dietaryArray = $dietary ? explode(',', $dietary) : [];
         $restaurants = $this->restaurantService->fetchAndProcessRestaurants(
             (string)$lat,
             (string)$lng,
             $diningOption,
-            $keyword
+            $keyword,
+            $dietaryArray
         );
 
         // Convert collection to array before processing

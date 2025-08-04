@@ -12,7 +12,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\Query\Builder;
 
 class UserMealService
 {
@@ -21,7 +20,7 @@ class UserMealService
     private const USER_MEALS_PER_PAGE = 50;
     private const SEARCH_PER_PAGE = 10;
 
-    public function getRandomRecipesUnauthorized($count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
+    public function getRandomRecipesUnauthorized($count = 17, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
         $query = Recipe::query()
             ->with(['categories', 'cuisines', 'dietary'])
@@ -67,7 +66,7 @@ class UserMealService
         return $recipes;
     }
 
-    public function getRandomRecipesActive($authId, $count = 27, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
+    public function getRandomRecipesActive($authId, $count = 17, $categoryFilter = null, $cuisineFilter = null, $dietaryFilter = null, $cookingTime = null): Collection
     {
         $query = UserMeal::with([
             'categories',
